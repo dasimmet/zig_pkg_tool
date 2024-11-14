@@ -1,0 +1,17 @@
+.{
+    .name = "zig-menuconfig",
+    .version = "0.0.0",
+    .dependencies = .{
+        .vaxis = .{
+            .url = "git+https://github.com/rockorager/libvaxis.git#dc0a228a5544988d4a920cfb40be9cd28db41423",
+            .hash = "1220c72c1697dd9008461ead702997a15d8a1c5810247f02e7983b9f74c6c6e4c087",
+        },
+    },
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+        "LICENSE",
+    },
+}
