@@ -16,7 +16,7 @@ pub fn main() !void {
     var output = try cwd.createFile(args[2], .{});
     defer output.close();
 
-    var compress = try gzip.compressor(output.writer(), .{ .level = .best });
+    var compress = try gzip.compressor(output.writer(), .{});
     defer compress.finish() catch @panic("compress finish error");
 
     var archive = tar.writer(compress.writer().any());
@@ -27,18 +27,13 @@ pub fn main() !void {
     // std.debug.print("opening: {s}\n", .{args[1]});
     var input = try cwd.openDir(args[1], .{
         .iterate = true,
+        .access_sub_paths = true,
     });
     defer input.close();
 
     var iter = try input.walk(alloc);
     defer iter.deinit();
     while (try iter.next()) |entry| {
-        // std.debug.print("entry: {s}\n", .{entry.path});
-        switch (entry.kind) {
-            .directory => {},
-            else => {
-                try archive.writeEntry(entry);
-            },
-        }
+        try archive.writeEntry(entry);
     }
 }
