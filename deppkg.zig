@@ -8,15 +8,11 @@ pub fn main() !void {
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
-    for (args) |arg| std.debug.print(" {s}", .{ arg });
-    std.debug.print("\n", .{});
+    // for (args) |arg| std.debug.print(" {s}", .{ arg });
+    // std.debug.print("\n", .{});
 
     const zig_exe = args[1];
     _ = zig_exe;
@@ -26,8 +22,8 @@ pub fn main() !void {
     const cache_dir = args[4];
     _ = cache_dir;
     const extra_args = args[9..];
-    for (extra_args) |arg| std.debug.print(" {s}", .{ arg });
-    std.debug.print("\n", .{});
+    // for (extra_args) |arg| std.debug.print(" {s}", .{ arg });
+    // std.debug.print("\n", .{});
 
     if (extra_args.len != 1) {
         std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
@@ -51,5 +47,5 @@ pub fn main() !void {
             try tar_args.append(try std.fmt.allocPrint(gpa, "{s}:{s}", .{hash,dep.build_root}));
         }
     }
-    try targz.process(output_file, tar_args.items, gpa, arena);
+    try targz.process(output_file, tar_args.items, gpa);
 }

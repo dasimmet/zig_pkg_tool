@@ -7,10 +7,6 @@ pub fn main() !void {
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
@@ -19,10 +15,14 @@ pub fn main() !void {
         std.log.err("usage: targz <output file> [<hash>:<dir>]", .{});
         return error.NotEnoughArguments;
     }
-    try process(args[1],args[2..], gpa, arena);
+    try process(args[1],args[2..], gpa);
 }
 
-pub fn process(out_path: []const u8, args:[]const []const u8, gpa: std.mem.Allocator, arena: std.mem.Allocator) !void {
+pub fn process(out_path: []const u8, args:[]const []const u8, gpa: std.mem.Allocator) !void {
+    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
+    const arena = arena_allocator.allocator();
+    defer arena_allocator.deinit();
+
     const cwd = std.fs.cwd();
     var output = try cwd.createFile(out_path, .{});
     defer output.close();
@@ -49,6 +49,7 @@ pub fn process(out_path: []const u8, args:[]const []const u8, gpa: std.mem.Alloc
         } else {
             archiveRoot = try std.fmt.allocPrint(arena, "p/{s}", .{hash});
         }
+        try archive.setRoot("");
         try archive.setRoot(archiveRoot);
 
         var input = try cwd.openDir(path, .{
@@ -67,6 +68,7 @@ pub fn process(out_path: []const u8, args:[]const []const u8, gpa: std.mem.Alloc
                 ".svn",
                 ".venv",
                 "_venv",
+                ".spin",
             }) |ignore| {
                 if (std.mem.indexOf(u8, entry.path, ignore)) |_| continue :outer;
             }
