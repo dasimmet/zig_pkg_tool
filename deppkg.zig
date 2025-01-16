@@ -1,6 +1,7 @@
 const std = @import("std");
-const tar = std.tar;
-const gzip = std.compress.gzip;
+pub const root = @import("@build");
+pub const dependencies = @import("@dependencies");
+pub const targz = @import("src/targz.zig");
 
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
@@ -10,11 +11,44 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
-    if (args.len < 3) {
-        std.log.err("usage: targz <output file> [<hash>:<dir>]", .{});
+    // for (args) |arg| std.debug.print(" {s}", .{ arg });
+    // std.debug.print("\n", .{});
+
+    const zig_exe = args[1];
+    _ = zig_exe;
+    const zig_lib_dir = args[2];
+    _ = zig_lib_dir;
+    const build_root = args[3];
+    const cache_dir = args[4];
+    _ = cache_dir;
+    const extra_args = args[9..];
+    // for (extra_args) |arg| std.debug.print(" {s}", .{ arg });
+    // std.debug.print("\n", .{});
+
+    if (extra_args.len != 1) {
+        std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
         return error.NotEnoughArguments;
     }
-    try process(args[1], args[2..], gpa);
+    const output_file = extra_args[0];
+
+    var tar_args = std.ArrayList([]const u8).init(gpa);
+    defer {
+        for (tar_args.items) |it| {
+            gpa.free(it);
+        }
+        tar_args.deinit();
+    }
+    try tar_args.append(try std.fmt.allocPrint(gpa, "root:{s}", .{build_root}));
+
+    inline for (@typeInfo(dependencies.packages).@"struct".decls) |decl| {
+        const hash = decl.name;
+        const dep = @field(dependencies.packages, hash);
+        if (@hasDecl(dep, "build_root")) {
+            try tar_args.append(try std.fmt.allocPrint(gpa, "{s}:{s}", .{ hash, dep.build_root }));
+        }
+    }
+
+    try process(output_file, tar_args.items, gpa);
 }
 
 pub fn process(out_path: []const u8, args: []const []const u8, gpa: std.mem.Allocator) !void {
@@ -23,13 +57,14 @@ pub fn process(out_path: []const u8, args: []const []const u8, gpa: std.mem.Allo
     defer arena_allocator.deinit();
 
     const cwd = std.fs.cwd();
+    std.log.info("writing deppk tar.gz: {s}", .{out_path});
     var output = try cwd.createFile(out_path, .{});
     defer output.close();
 
-    var compress = try gzip.compressor(output.writer(), .{});
+    var compress = try std.compress.gzip.compressor(output.writer(), .{});
     defer compress.finish() catch @panic("compress finish error");
 
-    var archive = tar.writer(compress.writer().any());
+    var archive = std.tar.writer(compress.writer().any());
     defer archive.finish() catch @panic("archive finish error");
 
     var archiveRoot: []const u8 = undefined;
