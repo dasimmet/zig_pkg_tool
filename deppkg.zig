@@ -40,7 +40,7 @@ pub fn main() !void {
     }
     try tar_args.append(try std.fmt.allocPrint(gpa, "root:{s}", .{build_root}));
 
-    inline for (@typeInfo(dependencies.packages).@"struct".decls) |decl| {
+    inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {
         const hash = decl.name;
         const dep = @field(dependencies.packages, hash);
         if (@hasDecl(dep, "build_root")) {
