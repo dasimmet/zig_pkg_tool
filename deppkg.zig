@@ -6,13 +6,24 @@ pub const targz = @import("src/targz.zig");
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
+    defer {
+        switch (gpa_alloc.deinit()) {
+            .leak => @panic("GPA MEMORY LEAK"),
+            .ok => {},
+        }
+    }
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
+    // std.debug.print("args:\n", .{});
     // for (args) |arg| std.debug.print(" {s}", .{ arg });
     // std.debug.print("\n", .{});
+
+    if (args.len != 10) {
+        std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
+        return;
+    }
 
     const zig_exe = args[1];
     _ = zig_exe;
@@ -21,40 +32,38 @@ pub fn main() !void {
     const build_root = args[3];
     const cache_dir = args[4];
     _ = cache_dir;
-    const extra_args = args[9..];
-    // for (extra_args) |arg| std.debug.print(" {s}", .{ arg });
-    // std.debug.print("\n", .{});
+    const output_file = args[9];
 
-    if (extra_args.len != 1) {
-        std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
-        return error.NotEnoughArguments;
-    }
-    const output_file = extra_args[0];
-
-    var tar_args = std.ArrayList([]const u8).init(gpa);
+    var tar_paths = std.ArrayList([]const u8).init(gpa);
+    try tar_paths.append("build/root");
     defer {
-        for (tar_args.items) |it| {
+        for (tar_paths.items[1..]) |it| {
             gpa.free(it);
         }
-        tar_args.deinit();
+        tar_paths.deinit();
     }
-    try tar_args.append(try std.fmt.allocPrint(gpa, "root:{s}", .{build_root}));
+
+    var fs_paths = std.ArrayList([]const u8).init(gpa);
+    defer {
+        fs_paths.deinit();
+    }
+    try fs_paths.append(build_root);
 
     inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {
         const hash = decl.name;
         const dep = @field(dependencies.packages, hash);
         if (@hasDecl(dep, "build_root")) {
-            try tar_args.append(try std.fmt.allocPrint(gpa, "{s}:{s}", .{ hash, dep.build_root }));
+            const tar_path = try std.fmt.allocPrint(gpa, "build/p/{s}", .{hash});
+            try tar_paths.append(tar_path);
+            try fs_paths.append(dep.build_root);
         }
     }
 
-    try process(output_file, tar_args.items, gpa);
+    try process(output_file, tar_paths.items, fs_paths.items, gpa);
 }
 
-pub fn process(out_path: []const u8, args: []const []const u8, gpa: std.mem.Allocator) !void {
-    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
+pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []const []const u8, gpa: std.mem.Allocator) !void {
+    std.debug.assert(fs_paths.len == tar_paths.len);
 
     const cwd = std.fs.cwd();
     std.log.info("writing deppk tar.gz: {s}", .{out_path});
@@ -67,35 +76,39 @@ pub fn process(out_path: []const u8, args: []const []const u8, gpa: std.mem.Allo
     var archive = std.tar.writer(compress.writer().any());
     defer archive.finish() catch @panic("archive finish error");
 
-    var archiveRoot: []const u8 = undefined;
-
-    next_arg: for (args, 0..) |arg, i| {
-        const split = std.mem.indexOf(u8, arg, ":") orelse {
-            std.log.err("invalid arg: {s}", .{arg});
-            return error.InvalidArg;
-        };
-        const hash = arg[0..split];
-        const path = arg[split + 1 ..];
-
-        for (args, 0..) |arg_check, j| {
-            if (i != j and try argStartsWith(arg_check, path)) continue :next_arg;
+    next_arg: for (fs_paths, 0..) |fs_path, i| {
+        for (fs_paths, 0..) |parent_check, j| {
+            if (i != j and parent_check.len <= fs_path.len and std.mem.startsWith(u8, fs_path, parent_check)) {
+                continue :next_arg;
+            }
         }
+        const archive_path = tar_paths[i];
 
-        std.log.info("dep: {s}:{s}", .{ hash, path });
+        std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
 
-        if (std.mem.eql(u8, hash, "root")) {
-            archiveRoot = try arena.dupe(u8, "root");
-        } else {
-            archiveRoot = try std.fmt.allocPrint(arena, "p/{s}", .{hash});
-        }
         try archive.setRoot("");
-        try archive.setRoot(archiveRoot);
+        try archive.setRoot(archive_path);
 
-        var input = try cwd.openDir(path, .{
+        var input = try cwd.openDir(fs_path, .{
             .iterate = true,
             .access_sub_paths = true,
         });
         defer input.close();
+
+        const zon_file = input.openFile("build.zig.zon", .{}) catch |e| switch (e) {
+            error.FileNotFound => null,
+            else => return e,
+        };
+        if (zon_file) |zf| {
+            // TODO: import "files" filter based on "paths" once "std.zon" is available
+            // also, we could update the dependencies to a relative path inside the archive,
+            // and add top-level build.zig(.zon) files pointing to root
+            //
+            // after extracting, ideally the generated top level file is equivalent to
+            // the root with all dependencies insourced
+            std.debug.print("zf: {any}\n", .{zf});
+            defer zf.close();
+        }
 
         var iter = try input.walk(gpa);
         defer iter.deinit();
