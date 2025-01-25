@@ -18,39 +18,42 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("vaxis", vaxis.module("vaxis"));
 
-    // const tuile = b.dependency("tuile", .{});
-    // exe.root_module.addImport("tuile", tuile.module("tuile"));
-
     const config_step = b.step("menuconfig", "example menu");
     config_step.dependOn(&run.step);
 
-    depPackagesInternal(b, b);
     depTree(b);
+
+    const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
+    const depPkgInstall = b.addInstallFile( 
+        depPackagesInternal(b, .{ .name = "depkg" }),
+        "deppkg/deppkg.tar.gz",
+    );
+    deppkg_step.dependOn(&depPkgInstall.step);
 }
 
-pub fn depPackages(b: *std.Build) void {
+pub const DepPackageOptions = struct {
+    name: []const u8,
+};
+
+pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
     const this_b = b.dependencyFromBuildZig(@This(), {}).builder;
-    depPackagesInternal(b, this_b);
+    return depPackagesInternal(this_b, opt);
 }
 
-fn depPackagesInternal(b: *std.Build, this_b: *std.Build) void {
+fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
     const build_runner = @import("root");
     const deps = build_runner.dependencies;
     const exe = b.addExecutable(.{
-        .name = "targz",
-        .root_source_file = this_b.path("src/targz.zig"),
+        .name = "pkg-targz",
+        .root_source_file = b.path("src/targz.zig"),
         .target = b.graph.host,
         .optimize = .Debug,
     });
-    const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
 
     const depPkg = b.addRunArtifact(exe);
     depPkg.has_side_effects = true;
-    const basename = "deppkg.tar.gz";
+    const basename = b.fmt("{s}{s}", .{ opt.name, ".tar.gz" });
     const depPkgOut = depPkg.addOutputFileArg(basename);
-
-    const depPkgInstall = b.addInstallFile(depPkgOut, "deppkg/" ++ basename);
-    deppkg_step.dependOn(&depPkgInstall.step);
 
     depPkg.setEnvironmentVariable("ZIG_BUILD_ROOT", b.build_root.path.?);
 
@@ -71,6 +74,8 @@ fn depPackagesInternal(b: *std.Build, this_b: *std.Build) void {
             depPkg.addArg(arg);
         }
     }
+
+    return depPkgOut;
 }
 
 pub fn depTree(b: *std.Build) void {
