@@ -132,6 +132,8 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
             };
         }
     }
+
+    std.log.info("written deppk tar.gz: {s}", .{out_path});
 }
 
 fn argStartsWith(needle: []const u8, haystack: []const u8) !bool {
