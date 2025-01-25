@@ -40,6 +40,7 @@ pub fn depPackages(b: *std.Build) void {
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
 
     const depPkg = b.addRunArtifact(exe);
+    depPkg.has_side_effects = true;
     const basename = "deppkg.tar.gz";
     const depPkgOut = depPkg.addOutputFileArg(basename);
 
@@ -70,7 +71,6 @@ pub fn depPackages(b: *std.Build) void {
 }
 
 pub fn depTree(b: *std.Build) void {
-
     const build_runner = @import("root");
     const deps = build_runner.dependencies;
     const deppkg_step = b.step("deptree", "");
@@ -78,11 +78,11 @@ pub fn depTree(b: *std.Build) void {
     var cmd: ?*std.Build.Step.Run = null;
 
     inline for (deps.root_deps) |decl| {
-        const next_cmd = bPrint(b, "%s - %s\n", .{decl[0], decl[1]});
+        const next_cmd = bPrint(b, "%s - %s\n", .{ decl[0], decl[1] });
         if (cmd) |c| c.step.dependOn(&next_cmd.step);
         cmd = next_cmd;
-        for (@field(deps.packages,decl[1]).deps) |dep_decl| {
-            const dep_next_cmd = bPrint(b, "%s - %s\n", .{dep_decl[0], dep_decl[1]});
+        for (@field(deps.packages, decl[1]).deps) |dep_decl| {
+            const dep_next_cmd = bPrint(b, "%s - %s\n", .{ dep_decl[0], dep_decl[1] });
             if (cmd) |c| c.step.dependOn(&dep_next_cmd.step);
             cmd = next_cmd;
         }
