@@ -108,7 +108,7 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
             error.FileNotFound => null,
             else => return e,
         };
-        var ignores: []const []const u8 = &default_ignores;
+        const ignores: []const []const u8 = &default_ignores;
         if (zon_file) |zf| {
             // TODO: import "files" filter based on "paths" once "std.zon" is available
             // also, we could update the dependencies to a relative path inside the archive,
@@ -119,7 +119,7 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
             // after extracting, ideally the generated top level file is equivalent to
             // the root with all dependencies insourced
             std.debug.print("zf: {any}\n", .{zf});
-            defer zf.close();
+            zf.close();
         }
 
         var iter = try input.walk(gpa);
