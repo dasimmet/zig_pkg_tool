@@ -58,5 +58,10 @@ pub fn main() !void {
         }
     }
 
-    try targz.process(output_file, tar_paths.items, fs_paths.items, gpa);
+    try targz.process(.{
+        .out_path = output_file,
+        .tar_paths = tar_paths.items,
+        .fs_paths = fs_paths.items,
+        .gpa = gpa,
+    });
 }

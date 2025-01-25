@@ -71,15 +71,28 @@ pub fn main() !void {
         try tar_paths.append(archiveRoot);
         try fs_paths.append(package_path);
     }
-    try process(args[1], tar_paths.items, fs_paths.items, gpa);
+
+    try process(.{
+        .out_path = args[1],
+        .tar_paths = tar_paths.items,
+        .fs_paths = fs_paths.items,
+        .gpa = gpa,
+    });
 }
 
-pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []const []const u8, gpa: std.mem.Allocator) !void {
-    std.debug.assert(fs_paths.len == tar_paths.len);
+const Options = struct {
+    gpa: std.mem.Allocator,
+    out_path: []const u8,
+    tar_paths: []const []const u8,
+    fs_paths: []const []const u8,
+};
+
+pub fn process(opt: Options) !void {
+    std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
     const cwd = std.fs.cwd();
-    std.log.info("writing deppk tar.gz: {s}", .{out_path});
-    var output = try cwd.createFile(out_path, .{});
+    std.log.info("writing deppk tar.gz: {s}", .{opt.out_path});
+    var output = try cwd.createFile(opt.out_path, .{});
     defer output.close();
 
     var compress = try std.compress.gzip.compressor(output.writer(), .{});
@@ -88,13 +101,13 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
     var archive = std.tar.writer(compress.writer().any());
     defer archive.finish() catch @panic("archive finish error");
 
-    next_arg: for (fs_paths, 0..) |fs_path, i| {
-        for (fs_paths, 0..) |parent_check, j| {
+    next_arg: for (opt.fs_paths, 0..) |fs_path, i| {
+        for (opt.fs_paths, 0..) |parent_check, j| {
             if (i != j and parent_check.len <= fs_path.len and std.mem.startsWith(u8, fs_path, parent_check)) {
                 continue :next_arg;
             }
         }
-        const archive_path = tar_paths[i];
+        const archive_path = opt.tar_paths[i];
 
         std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
 
@@ -125,7 +138,7 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
             zf.close();
         }
 
-        var iter = try input.walk(gpa);
+        var iter = try input.walk(opt.gpa);
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
             for (ignores) |ignore| {
@@ -140,5 +153,5 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
         }
     }
 
-    std.log.info("written deppk tar.gz: {s}", .{out_path});
+    std.log.info("written deppk tar.gz: {s}", .{opt.out_path});
 }
