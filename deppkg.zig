@@ -2,6 +2,15 @@ const std = @import("std");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("src/targz.zig");
+pub const default_ignores = .{
+    ".zig-cache",
+    "zig-out",
+    ".git",
+    ".svn",
+    ".venv",
+    "_venv",
+    ".spin",
+};
 
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
@@ -99,10 +108,13 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
             error.FileNotFound => null,
             else => return e,
         };
+        var ignores: []const []const u8 = &default_ignores;
         if (zon_file) |zf| {
             // TODO: import "files" filter based on "paths" once "std.zon" is available
             // also, we could update the dependencies to a relative path inside the archive,
             // and add top-level build.zig(.zon) files pointing to root
+            //
+            // for now we use a default "ignores" blacklist instead
             //
             // after extracting, ideally the generated top level file is equivalent to
             // the root with all dependencies insourced
@@ -113,15 +125,7 @@ pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []
         var iter = try input.walk(gpa);
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
-            inline for (&.{
-                ".zig-cache",
-                "zig-out",
-                ".git",
-                ".svn",
-                ".venv",
-                "_venv",
-                ".spin",
-            }) |ignore| {
+            for (ignores) |ignore| {
                 if (std.mem.indexOf(u8, entry.path, ignore)) |_| continue :outer;
             }
             archive.writeEntry(entry) catch |e| {
