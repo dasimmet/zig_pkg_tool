@@ -46,13 +46,22 @@ pub fn depPackages(b: *std.Build) void {
     const depPkgInstall = b.addInstallFile(depPkgOut, "deppkg/" ++ basename);
     deppkg_step.dependOn(&depPkgInstall.step);
 
-    depPkg.addPrefixedDirectoryArg("root:", b.path(""));
+    depPkg.setEnvironmentVariable("ZIG_BUILD_ROOT", b.build_root.path.?);
+
+    const global_cache = b.graph.global_cache_root.path.?;
+    depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE", global_cache);
+
+    const cache_prefix_len = global_cache.len + std.fs.path.sep_str.len * 2 + "o".len;
 
     inline for (@typeInfo(deps.packages).@"struct".decls) |decl| {
         const hash = decl.name;
         const dep = @field(deps.packages, hash);
         if (@hasDecl(dep, "build_root")) {
-            const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root });
+            if (!std.mem.startsWith(u8, dep.build_root, global_cache)) {
+                std.log.err("yo: {s}", .{dep.build_root});
+                @panic("yo");
+            }
+            const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root[cache_prefix_len..] });
             depPkg.addArg(arg);
 
             // b.default_step.dependOn(&depPkgInstall.step);

@@ -2,17 +2,6 @@ const std = @import("std");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("src/targz.zig");
-pub const default_ignores = .{
-    "zig-cache",
-    ".zig-cache",
-    "zig-out",
-    ".git",
-    ".svn",
-    ".venv",
-    "_venv",
-    ".spin",
-};
-
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
@@ -69,83 +58,5 @@ pub fn main() !void {
         }
     }
 
-    try process(output_file, tar_paths.items, fs_paths.items, gpa);
-}
-
-pub fn process(out_path: []const u8, tar_paths: []const []const u8, fs_paths: []const []const u8, gpa: std.mem.Allocator) !void {
-    std.debug.assert(fs_paths.len == tar_paths.len);
-
-    const cwd = std.fs.cwd();
-    std.log.info("writing deppk tar.gz: {s}", .{out_path});
-    var output = try cwd.createFile(out_path, .{});
-    defer output.close();
-
-    var compress = try std.compress.gzip.compressor(output.writer(), .{});
-    defer compress.finish() catch @panic("compress finish error");
-
-    var archive = std.tar.writer(compress.writer().any());
-    defer archive.finish() catch @panic("archive finish error");
-
-    next_arg: for (fs_paths, 0..) |fs_path, i| {
-        for (fs_paths, 0..) |parent_check, j| {
-            if (i != j and parent_check.len <= fs_path.len and std.mem.startsWith(u8, fs_path, parent_check)) {
-                continue :next_arg;
-            }
-        }
-        const archive_path = tar_paths[i];
-
-        std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
-
-        try archive.setRoot("");
-        try archive.setRoot(archive_path);
-
-        var input = try cwd.openDir(fs_path, .{
-            .iterate = true,
-            .access_sub_paths = true,
-        });
-        defer input.close();
-
-        const zon_file = input.openFile("build.zig.zon", .{}) catch |e| switch (e) {
-            error.FileNotFound => null,
-            else => return e,
-        };
-        const ignores: []const []const u8 = &default_ignores;
-        if (zon_file) |zf| {
-            // TODO: import "files" filter based on "paths" once "std.zon" is available
-            // also, we could update the dependencies to a relative path inside the archive,
-            // and add top-level build.zig(.zon) files pointing to root
-            //
-            // for now we use a default "ignores" blacklist instead
-            //
-            // after extracting, ideally the generated top level file is equivalent to
-            // the root with all dependencies insourced
-            std.debug.print("zf: {any}\n", .{zf});
-            zf.close();
-        }
-
-        var iter = try input.walk(gpa);
-        defer iter.deinit();
-        outer: while (try iter.next()) |entry| {
-            for (ignores) |ignore| {
-                if (std.mem.indexOf(u8, entry.path, ignore)) |_| continue :outer;
-            }
-            archive.writeEntry(entry) catch |e| {
-                switch (e) {
-                    error.IsDir => continue,
-                    else => return e,
-                }
-            };
-        }
-    }
-
-    std.log.info("written deppk tar.gz: {s}", .{out_path});
-}
-
-fn argStartsWith(needle: []const u8, haystack: []const u8) !bool {
-    const split = std.mem.indexOf(u8, needle, ":") orelse {
-        std.log.err("invalid arg: {s}", .{needle});
-        return error.InvalidArg;
-    };
-    const path = needle[split + 1 ..];
-    return std.mem.startsWith(u8, haystack, path);
+    try targz.process(output_file, tar_paths.items, fs_paths.items, gpa);
 }
