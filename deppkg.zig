@@ -3,6 +3,7 @@ pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("src/targz.zig");
 pub const default_ignores = .{
+    "zig-cache",
     ".zig-cache",
     "zig-out",
     ".git",
