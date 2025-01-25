@@ -60,7 +60,7 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     const global_cache = b.graph.global_cache_root.path.?;
     depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE", global_cache);
 
-    const cache_prefix_len = global_cache.len + std.fs.path.sep_str.len * 2 + "o".len;
+    const cache_prefix_len = global_cache.len + std.fs.path.sep_str.len * 2 + "p".len;
 
     inline for (comptime std.meta.declarations(deps.packages)) |decl| {
         const hash = decl.name;

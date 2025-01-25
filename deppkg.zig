@@ -59,8 +59,7 @@ pub fn main() !void {
             for (fs_paths.items, 0..) |parent_check, j| {
                 if (std.mem.startsWith(u8, dep.build_root, parent_check)) {
                     add_pkg_to_arc = false;
-                }
-                if (std.mem.startsWith(u8, parent_check, dep.build_root)) {
+                } else if (std.mem.startsWith(u8, parent_check, dep.build_root)) {
                     _ = tar_paths.orderedRemove(j);
                     _ = fs_paths.orderedRemove(j);
                 }

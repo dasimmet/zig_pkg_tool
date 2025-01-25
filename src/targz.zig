@@ -71,8 +71,7 @@ pub fn main() !void {
         for (fs_paths.items, 0..) |parent_check, j| {
             if (std.mem.startsWith(u8, package_path, parent_check)) {
                 continue :next_arg;
-            }
-            if (std.mem.startsWith(u8, parent_check, package_path)) {
+            } else if (std.mem.startsWith(u8, parent_check, package_path)) {
                 _ = tar_paths.orderedRemove(j);
                 _ = fs_paths.orderedRemove(j);
             }
