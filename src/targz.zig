@@ -62,6 +62,7 @@ pub fn process(out_path: []const u8, args:[]const []const u8, gpa: std.mem.Alloc
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
             inline for (&.{
+                "zig-cache",
                 ".zig-cache",
                 "zig-out",
                 ".git",
