@@ -48,20 +48,34 @@ pub fn main() !void {
     }
     try fs_paths.append(build_root);
 
+    var add_pkg_to_arc: bool = true;
     inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {
+        add_pkg_to_arc = true;
         const hash = decl.name;
         const dep = @field(dependencies.packages, hash);
         if (@hasDecl(dep, "build_root")) {
             const tar_path = try std.fmt.allocPrint(gpa, "build/p/{s}", .{hash});
-            try tar_paths.append(tar_path);
-            try fs_paths.append(dep.build_root);
+
+            for (fs_paths.items, 0..) |parent_check, j| {
+                if (std.mem.startsWith(u8, dep.build_root, parent_check)) {
+                    add_pkg_to_arc = false;
+                }
+                if (std.mem.startsWith(u8, parent_check, dep.build_root)) {
+                    _ = tar_paths.orderedRemove(j);
+                    _ = fs_paths.orderedRemove(j);
+                }
+            }
+            if (add_pkg_to_arc) {
+                try tar_paths.append(tar_path);
+                try fs_paths.append(dep.build_root);
+            }
         }
     }
 
     try targz.process(.{
+        .gpa = gpa,
         .out_path = output_file,
         .tar_paths = tar_paths.items,
         .fs_paths = fs_paths.items,
-        .gpa = gpa,
     });
 }

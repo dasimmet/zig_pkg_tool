@@ -53,7 +53,7 @@ pub fn main() !void {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
-    for (args[2..]) |arg| {
+    next_arg: for (args[2..]) |arg| {
         const split = std.mem.indexOf(u8, arg, ":") orelse {
             std.log.err("invalid arg: {s}", .{arg});
             return error.InvalidArg;
@@ -68,15 +68,24 @@ pub fn main() !void {
         } else {
             package_path = try std.fs.path.join(arena, &.{ package_dir, arg[split + 1 ..] });
         }
+        for (fs_paths.items, 0..) |parent_check, j| {
+            if (std.mem.startsWith(u8, package_path, parent_check)) {
+                continue :next_arg;
+            }
+            if (std.mem.startsWith(u8, parent_check, package_path)) {
+                _ = tar_paths.orderedRemove(j);
+                _ = fs_paths.orderedRemove(j);
+            }
+        }
         try tar_paths.append(archiveRoot);
         try fs_paths.append(package_path);
     }
 
     try process(.{
+        .gpa = gpa,
         .out_path = args[1],
         .tar_paths = tar_paths.items,
         .fs_paths = fs_paths.items,
-        .gpa = gpa,
     });
 }
 
@@ -101,12 +110,7 @@ pub fn process(opt: Options) !void {
     var archive = std.tar.writer(compress.writer().any());
     defer archive.finish() catch @panic("archive finish error");
 
-    next_arg: for (opt.fs_paths, 0..) |fs_path, i| {
-        for (opt.fs_paths, 0..) |parent_check, j| {
-            if (i != j and parent_check.len <= fs_path.len and std.mem.startsWith(u8, fs_path, parent_check)) {
-                continue :next_arg;
-            }
-        }
+    for (opt.fs_paths, 0..) |fs_path, i| {
         const archive_path = opt.tar_paths[i];
 
         std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });

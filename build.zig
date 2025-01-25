@@ -24,16 +24,21 @@ pub fn build(b: *std.Build) void {
     const config_step = b.step("menuconfig", "example menu");
     config_step.dependOn(&run.step);
 
-    depPackages(b);
+    depPackagesInternal(b, b);
     depTree(b);
 }
 
 pub fn depPackages(b: *std.Build) void {
+    const this_b = b.dependencyFromBuildZig(@This(), {}).builder;
+    depPackagesInternal(b, this_b);
+}
+
+fn depPackagesInternal(b: *std.Build, this_b: *std.Build) void {
     const build_runner = @import("root");
     const deps = build_runner.dependencies;
     const exe = b.addExecutable(.{
         .name = "targz",
-        .root_source_file = b.path("src/targz.zig"),
+        .root_source_file = this_b.path("src/targz.zig"),
         .target = b.graph.host,
         .optimize = .Debug,
     });
@@ -54,7 +59,7 @@ pub fn depPackages(b: *std.Build) void {
 
     const cache_prefix_len = global_cache.len + std.fs.path.sep_str.len * 2 + "o".len;
 
-    inline for (@typeInfo(deps.packages).@"struct".decls) |decl| {
+    inline for (comptime std.meta.declarations(deps.packages)) |decl| {
         const hash = decl.name;
         const dep = @field(deps.packages, hash);
         if (@hasDecl(dep, "build_root")) {
@@ -64,8 +69,6 @@ pub fn depPackages(b: *std.Build) void {
             }
             const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root[cache_prefix_len..] });
             depPkg.addArg(arg);
-
-            // b.default_step.dependOn(&depPkgInstall.step);
         }
     }
 }
