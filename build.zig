@@ -24,11 +24,25 @@ pub fn build(b: *std.Build) void {
     depTreeInternal(b);
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
+    const depPkgArc = depPackagesInternal(b, .{ .name = "depkg" });
     const depPkgInstall = b.addInstallFile(
-        depPackagesInternal(b, .{ .name = "depkg" }),
+        depPkgArc,
         "deppkg/deppkg.tar.gz",
     );
     deppkg_step.dependOn(&depPkgInstall.step);
+
+    const extractor = b.addExecutable(.{
+        .name = "extractor",
+        .root_source_file = b.path("src/extractor.zig"),
+        .target = target,
+        .optimize = opt,
+    });
+    extractor.linkLibC();
+    const ext_run = b.addRunArtifact(extractor);
+    if (b.args) |args| ext_run.addArgs(args) else {
+        ext_run.addFileArg(depPkgArc);
+    }
+    b.step("extract", "extract deppkg").dependOn(&ext_run.step);
 }
 
 pub const DepPackageOptions = struct {
