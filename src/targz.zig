@@ -147,7 +147,16 @@ pub fn process(opt: Options) !void {
             for (ignores) |ignore| {
                 if (std.mem.indexOf(u8, entry.path, ignore)) |_| continue :outer;
             }
-            archive.writeEntry(entry) catch |e| {
+            var arc_entry: @TypeOf(entry) = entry;
+
+            if (@import("builtin").os.tag == .windows) {
+                const arc_path = try opt.gpa.dupeZ(u8, entry.path);
+                defer opt.gpa.free(arc_path);
+                _ = std.mem.replace(u8, entry.path, std.fs.path.sep_str, std.fs.path.sep_str_posix, arc_path);
+                arc_entry.path = arc_path;
+            }
+
+            archive.writeEntry(arc_entry) catch |e| {
                 switch (e) {
                     error.IsDir => continue,
                     else => return e,
