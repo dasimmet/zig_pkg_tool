@@ -144,8 +144,12 @@ pub fn process(opt: Options) !void {
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
-            for (ignores) |ignore| {
-                if (std.mem.indexOf(u8, entry.path, ignore)) |_| continue :outer;
+            if (i == 0) {
+                for (ignores) |ignore| {
+                    if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
+                        continue :outer;
+                    }
+                }
             }
             var arc_entry: @TypeOf(entry) = entry;
 
