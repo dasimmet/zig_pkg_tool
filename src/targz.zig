@@ -151,9 +151,13 @@ pub fn process(opt: Options) !void {
 
             if (@import("builtin").os.tag == .windows) {
                 const arc_path = try opt.gpa.dupeZ(u8, entry.path);
-                defer opt.gpa.free(arc_path);
                 _ = std.mem.replace(u8, entry.path, std.fs.path.sep_str, std.fs.path.sep_str_posix, arc_path);
                 arc_entry.path = arc_path;
+            }
+            defer {
+                if (@import("builtin").os.tag == .windows) {
+                    defer opt.gpa.free(arc_entry.path);
+                }
             }
 
             archive.writeEntry(arc_entry) catch |e| {
