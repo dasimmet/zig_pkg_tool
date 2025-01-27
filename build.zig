@@ -21,10 +21,10 @@ pub fn build(b: *std.Build) void {
     const config_step = b.step("menuconfig", "example menu");
     config_step.dependOn(&run.step);
 
-    depTree(b);
+    depTreeInternal(b);
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
-    const depPkgInstall = b.addInstallFile( 
+    const depPkgInstall = b.addInstallFile(
         depPackagesInternal(b, .{ .name = "depkg" }),
         "deppkg/deppkg.tar.gz",
     );
@@ -79,6 +79,11 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
 }
 
 pub fn depTree(b: *std.Build) void {
+    const this_b = b.dependencyFromBuildZig(@This(), {}).builder;
+    depTreeInternal(this_b);
+}
+
+pub fn depTreeInternal(b: *std.Build) void {
     const build_runner = @import("root");
     const deps = build_runner.dependencies;
     const deppkg_step = b.step("deptree", "");
