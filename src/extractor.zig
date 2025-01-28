@@ -14,10 +14,7 @@ pub fn main() !void {
     var env_map = try std.process.getEnvMap(gpa);
     defer env_map.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-    _ = arena;
+    const zig = env_map.get("ZIG") orelse "zig";
 
     var tempD = try TempFile.tmpDir(.{
         .prefix = "extractor",
@@ -108,7 +105,7 @@ pub fn main() !void {
             const res = try std.process.Child.run(.{
                 .allocator = gpa,
                 .argv = &.{
-                    "zig", "fetch", a.tf.abs_path,
+                    zig, "fetch", a.tf.abs_path,
                 },
             });
             defer {
