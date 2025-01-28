@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
     });
     extractor.linkLibC();
     const ext_run = b.addRunArtifact(extractor);
+    ext_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
     if (b.args) |args| ext_run.addArgs(args) else {
         ext_run.addFileArg(depPkgArc);
     }
