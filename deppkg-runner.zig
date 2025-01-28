@@ -1,7 +1,7 @@
 const std = @import("std");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
-pub const targz = @import("src/targz.zig");
+pub const targz = @import("src/pkg-targz.zig");
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();

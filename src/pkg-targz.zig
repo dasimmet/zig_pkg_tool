@@ -91,10 +91,11 @@ pub fn main() !void {
 const Options = struct {
     gpa: std.mem.Allocator,
     out_path: []const u8,
-    tar_paths: []const []const u8,
-    fs_paths: []const []const u8,
+    tar_paths: []const []const u8, // paths inside the tar archive. the fist element is expected to be "root"
+    fs_paths: []const []const u8, // paths to directories on the local filesystem
 };
 
+/// convert a list of zig package directories to a tar.gz archive
 pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 

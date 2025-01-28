@@ -32,8 +32,8 @@ pub fn build(b: *std.Build) void {
     deppkg_step.dependOn(&depPkgInstall.step);
 
     const extractor = b.addExecutable(.{
-        .name = "extractor",
-        .root_source_file = b.path("src/extractor.zig"),
+        .name = "pkg-extractor",
+        .root_source_file = b.path("src/pkg-extractor.zig"),
         .target = target,
         .optimize = opt,
     });
@@ -60,7 +60,7 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     const deps = build_runner.dependencies;
     const exe = b.addExecutable(.{
         .name = "pkg-targz",
-        .root_source_file = b.path("src/targz.zig"),
+        .root_source_file = b.path("src/pkg-targz.zig"),
         .target = b.graph.host,
         .optimize = .Debug,
     });
