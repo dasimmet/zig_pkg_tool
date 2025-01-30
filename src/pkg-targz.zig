@@ -3,14 +3,14 @@ const tar = std.tar;
 const gzip = std.compress.gzip;
 
 pub const default_ignores = .{
-    "zig-cache",
-    ".zig-cache",
+    "zig-cache/",
+    ".zig-cache/",
     "zig-out",
-    ".git",
-    ".svn",
-    ".venv",
-    "_venv",
-    ".spin",
+    ".git/",
+    ".svn/",
+    ".venv/",
+    "_venv/",
+    ".spin/",
 };
 
 pub fn main() !void {
@@ -145,7 +145,7 @@ pub fn process(opt: Options) !void {
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
-            if (i == 0) {
+            if (true) {
                 for (ignores) |ignore| {
                     if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
                         continue :outer;
@@ -168,7 +168,10 @@ pub fn process(opt: Options) !void {
             archive.writeEntry(arc_entry) catch |e| {
                 switch (e) {
                     error.IsDir => continue,
-                    else => return e,
+                    else => {
+                        std.log.err("file: {s}\n{s}\n{s}", .{ fs_path, entry.path, arc_entry.path });
+                        return e;
+                    },
                 }
             };
         }

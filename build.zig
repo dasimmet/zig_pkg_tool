@@ -9,8 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = opt,
     });
-    // TODO: upgrade deps to 0.14.0
-    // b.installArtifact(exe);
+    b.installArtifact(exe);
     b.step("exe", "install menuconfig").dependOn(&b.addInstallArtifact(exe, .{}).step);
 
     const run = b.addRunArtifact(exe);
@@ -86,12 +85,10 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
         const hash = decl.name;
         const dep = @field(deps.packages, hash);
         if (@hasDecl(dep, "build_root")) {
-            if (!std.mem.startsWith(u8, dep.build_root, global_cache)) {
-                std.log.err("yo: {s}", .{dep.build_root});
-                @panic("yo");
+            if (std.mem.startsWith(u8, dep.build_root, global_cache)) {
+                const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root[cache_prefix_len..] });
+                depPkg.addArg(arg);
             }
-            const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root[cache_prefix_len..] });
-            depPkg.addArg(arg);
         }
     }
 
