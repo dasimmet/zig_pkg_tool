@@ -9,8 +9,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = opt,
     });
+    // TODO: upgrade deps to 0.14.0
+    // b.installArtifact(exe);
+    b.step("exe", "install menuconfig").dependOn(&b.addInstallArtifact(exe, .{}).step);
+
     const run = b.addRunArtifact(exe);
-    b.installArtifact(exe);
+    run.setEnvironmentVariable("ZIG_CACHE_DIR", b.cache_root.path.?);
 
     const vaxis = b.dependency("vaxis", .{
         .target = target,
@@ -29,6 +33,7 @@ pub fn build(b: *std.Build) void {
         depPkgArc,
         "deppkg/deppkg.tar.gz",
     );
+    b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
 
     const extractor = b.addExecutable(.{
@@ -43,6 +48,7 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| ext_run.addArgs(args) else {
         ext_run.addFileArg(depPkgArc);
     }
+    b.default_step.dependOn(&ext_run.step);
     b.step("extract", "extract deppkg").dependOn(&ext_run.step);
 }
 
@@ -66,7 +72,6 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     });
 
     const depPkg = b.addRunArtifact(exe);
-    depPkg.has_side_effects = true;
     const basename = b.fmt("{s}{s}", .{ opt.name, ".tar.gz" });
     const depPkgOut = depPkg.addOutputFileArg(basename);
 
