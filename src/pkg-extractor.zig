@@ -108,7 +108,7 @@ pub fn main() !void {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
             a.tar.finish() catch @panic("tar could not be finished");
-            std.log.info("zig fetch {s}", .{ a.tf.abs_path });
+            std.log.info("zig fetch {s}", .{a.tf.abs_path});
             const res = try std.process.Child.run(.{
                 .allocator = gpa,
                 .argv = &.{
@@ -120,12 +120,20 @@ pub fn main() !void {
                 gpa.free(res.stdout);
             }
             if (res.term != .Exited or res.term.Exited != 0) {
-                try err_buf.writer().print("ZigFetch:\n{s}\n{s}\n", .{res.stdout, res.stderr});
+                try err_buf.writer().print("zig fetch {s}\n{s}\n{s}\n", .{
+                    a.tf.abs_path,
+                    res.stdout,
+                    res.stderr,
+                });
                 fetch_err = error.ZigFetch;
             }
             if (a.hash) |hash| {
                 if (!std.mem.startsWith(u8, res.stdout, hash)) {
-                    try err_buf.writer().print("hash mismatch: {s}\n{s}\n{s}\n", .{ a.tf.abs_path, hash, res.stdout });
+                    try err_buf.writer().print("hash mismatch: {s}\nexpected:\"{s}\"\n  actual:\"{s}\"\n", .{
+                        a.tf.abs_path,
+                        hash,
+                        res.stdout[0..@min(res.stdout.len, hash.len)],
+                    });
                     fetch_err = error.HashMismatch;
                 }
                 std.log.info("extracted:\n{s}\n{s}", .{ hash, res.stdout });
