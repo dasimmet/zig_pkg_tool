@@ -22,6 +22,8 @@ pub fn main() !void {
     defer tempD.deinit();
 
     var temp = std.StringHashMap(TempTar).init(gpa);
+    // TODO: get rid of pointers in TempBar
+    try temp.ensureTotalCapacity(512);
     defer {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
@@ -99,9 +101,14 @@ pub fn main() !void {
         }
     }
     {
+        var fetch_err: ?anyerror = null;
+        var err_buf: std.ArrayList(u8) = .init(gpa);
+        defer err_buf.deinit();
+
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
             a.tar.finish() catch @panic("tar could not be finished");
+            std.log.info("zig fetch {s}", .{ a.tf.abs_path });
             const res = try std.process.Child.run(.{
                 .allocator = gpa,
                 .argv = &.{
@@ -113,18 +120,21 @@ pub fn main() !void {
                 gpa.free(res.stdout);
             }
             if (res.term != .Exited or res.term.Exited != 0) {
-                std.log.err("{s}", .{res.stdout});
-                std.log.err("{s}", .{res.stderr});
-                return error.ZigFetch;
+                try err_buf.writer().print("ZigFetch:\n{s}\n{s}\n", .{res.stdout, res.stderr});
+                fetch_err = error.ZigFetch;
             }
             if (a.hash) |hash| {
                 if (!std.mem.startsWith(u8, res.stdout, hash)) {
-                    std.log.err("hash mismatch: \n{s}\n{s}", .{ hash, res.stdout });
-                    return error.HashMismatch;
+                    try err_buf.writer().print("hash mismatch: {s}\n{s}\n{s}\n", .{ a.tf.abs_path, hash, res.stdout });
+                    fetch_err = error.HashMismatch;
                 }
+                std.log.info("extracted:\n{s}\n{s}", .{ hash, res.stdout });
             }
-            std.log.info("extracted:\n{s}\n{s}", .{ a.tf.abs_path, res.stdout });
         }
+        if (err_buf.items.len > 0) {
+            std.log.err("{s}", .{err_buf.items});
+        }
+        if (fetch_err) |fe| return fe;
     }
 }
 
