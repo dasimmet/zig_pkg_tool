@@ -2,6 +2,8 @@ const std = @import("std");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("src/pkg-targz.zig");
+const extractor_src = @embedFile("src/pkg-extractor.zig");
+
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
@@ -11,6 +13,10 @@ pub fn main() !void {
             .ok => {},
         }
     }
+
+    var arena_alloc = std.heap.ArenaAllocator.init(gpa);
+    const arena = arena_alloc.allocator();
+    defer arena_alloc.deinit();
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
@@ -34,19 +40,21 @@ pub fn main() !void {
     const output_file = args[9];
 
     var tar_paths = std.ArrayList([]const u8).init(gpa);
-    try tar_paths.append("build/root");
-    defer {
-        for (tar_paths.items[1..]) |it| {
-            gpa.free(it);
-        }
-        tar_paths.deinit();
-    }
+    defer tar_paths.deinit();
 
     var fs_paths = std.ArrayList([]const u8).init(gpa);
-    defer {
-        fs_paths.deinit();
-    }
+    defer fs_paths.deinit();
+
+    try tar_paths.append("build/root");
     try fs_paths.append(build_root);
+
+    try tar_paths.append("build/pkg-extractor.zig");
+    const ext_path = try std.mem.join(
+        arena,
+        "",
+        &.{ "raw:", extractor_src },
+    );
+    try fs_paths.append(ext_path);
 
     var add_pkg_to_arc: bool = true;
     inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {
@@ -54,17 +62,20 @@ pub fn main() !void {
         const hash = decl.name;
         const dep = @field(dependencies.packages, hash);
         if (@hasDecl(dep, "build_root")) {
-            const tar_path = try std.fmt.allocPrint(gpa, "build/p/{s}", .{hash});
 
-            for (fs_paths.items, 0..) |parent_check, j| {
+            var j: usize = fs_paths.items.len;
+            while (j > 0) : (j -= 1) {
+                const parent_check = fs_paths.items[j - 1];
+                if (std.mem.startsWith(u8, parent_check, "raw:")) continue;
                 if (std.mem.startsWith(u8, dep.build_root, parent_check)) {
                     add_pkg_to_arc = false;
                 } else if (std.mem.startsWith(u8, parent_check, dep.build_root)) {
-                    _ = tar_paths.orderedRemove(j);
-                    _ = fs_paths.orderedRemove(j);
+                    _ = tar_paths.orderedRemove(j - 1);
+                    _ = fs_paths.orderedRemove(j - 1);
                 }
             }
             if (add_pkg_to_arc) {
+                const tar_path = try std.fmt.allocPrint(arena, "build/p/{s}", .{hash});
                 try tar_paths.append(tar_path);
                 try fs_paths.append(dep.build_root);
             }
@@ -77,4 +88,5 @@ pub fn main() !void {
         .tar_paths = tar_paths.items,
         .fs_paths = fs_paths.items,
     });
+    std.log.info("written deppk tar.gz: {s}", .{output_file});
 }

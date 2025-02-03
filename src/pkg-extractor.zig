@@ -49,6 +49,7 @@ pub fn main() !void {
         .link_name_buffer = &link_name_buffer,
     });
     while (try t.next()) |entry| {
+        if (std.mem.eql(u8, "build/pkg-extractor.zig", entry.name)) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,
             entry.name,
@@ -137,6 +138,8 @@ pub fn main() !void {
                     fetch_err = error.HashMismatch;
                 }
                 std.log.info("extracted:\n{s}\n{s}", .{ hash, res.stdout });
+            } else {
+                std.log.info("extracted:\n{s}", .{ res.stdout });
             }
         }
         if (err_buf.items.len > 0) {

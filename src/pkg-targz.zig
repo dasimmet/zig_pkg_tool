@@ -113,9 +113,14 @@ pub fn process(opt: Options) !void {
     for (opt.fs_paths, 0..) |fs_path, i| {
         const archive_path = opt.tar_paths[i];
 
-        std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
-
         try archive.setRoot("");
+
+        if (std.mem.startsWith(u8, fs_path, "raw:")) {
+            try archive.writeFileBytes(archive_path, fs_path["raw:".len..], .{});
+            continue;
+        }
+
+        std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
         try archive.setRoot(archive_path);
 
         var input = try cwd.openDir(fs_path, .{
@@ -176,6 +181,4 @@ pub fn process(opt: Options) !void {
             };
         }
     }
-
-    std.log.info("written deppk tar.gz: {s}", .{opt.out_path});
 }
