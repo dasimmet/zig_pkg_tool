@@ -15,11 +15,12 @@ pub fn build(b: *std.Build) void {
     const run = b.addRunArtifact(exe);
     run.setEnvironmentVariable("ZIG_CACHE_DIR", b.cache_root.path.?);
 
-    const vaxis = b.dependency("vaxis", .{
+    if (b.lazyDependency("vaxis", .{
         .target = target,
         .optimize = opt,
-    });
-    exe.root_module.addImport("vaxis", vaxis.module("vaxis"));
+    })) |vaxis| {
+        exe.root_module.addImport("vaxis", vaxis.module("vaxis"));
+    }
 
     const config_step = b.step("menuconfig", "example menu");
     config_step.dependOn(&run.step);
@@ -130,10 +131,13 @@ pub fn depTreeInternal(b: *std.Build) void {
         const next_cmd = bPrint(b, "%s - %s\n", .{ decl[0], decl[1] });
         if (cmd) |c| c.step.dependOn(&next_cmd.step);
         cmd = next_cmd;
-        for (@field(deps.packages, decl[1]).deps) |dep_decl| {
-            const dep_next_cmd = bPrint(b, "%s - %s\n", .{ dep_decl[0], dep_decl[1] });
-            if (cmd) |c| c.step.dependOn(&dep_next_cmd.step);
-            cmd = next_cmd;
+        const field = @field(deps.packages, decl[1]);
+        if (@hasDecl(field, "deps")) {
+            for (field.deps) |dep_decl| {
+                const dep_next_cmd = bPrint(b, "%s - %s\n", .{ dep_decl[0], dep_decl[1] });
+                if (cmd) |c| c.step.dependOn(&dep_next_cmd.step);
+                cmd = next_cmd;
+            }
         }
     }
     if (deps.root_deps.len > 0) {

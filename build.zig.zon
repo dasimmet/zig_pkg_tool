@@ -3,6 +3,7 @@
     .version = "0.0.0",
     .dependencies = .{
         .vaxis = .{
+            .lazy = true,
             .url = "git+https://github.com/dasimmet/libvaxis.git?ref=zig-0.14.0#f724dadabf1f3fd4a2ea71210c57d61de6a63dcd",
             .hash = "1220c08f7b628ec87ac19742980abab71fa7fe613981a897e7f0a27469e06aa9ba4d",
         },
