@@ -110,7 +110,7 @@ pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
     const cwd = std.fs.cwd();
-    std.log.info("writing deppk tar.gz: {s}", .{opt.out_path});
+    std.log.info("writing deppkg tar.gz: {s}", .{opt.out_path});
     var output = try cwd.createFile(opt.out_path, .{});
     defer output.close();
 
