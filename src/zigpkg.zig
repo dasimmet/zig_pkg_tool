@@ -2,7 +2,7 @@ const std = @import("std");
 const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
-const Sources = struct {
+const DepPkgRunner = struct {
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
@@ -12,6 +12,8 @@ const Sources = struct {
 
 const usage =
     \\usage: zigpkg <subcommand> [--help]
+    \\
+    \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
     \\  extract <deppkg.tar.gz>
@@ -113,6 +115,41 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
     });
 }
 
+pub fn BuildRunner(T: type) type {
+    return struct {
+        const Self = @This();
+        temp: TempFile.TmpDir,
+        runner: []const u8,
+
+        pub fn init(gpa: std.mem.Allocator, runner_file: []const u8) !Self {
+            var tempD = try TempFile.tmpDir(.{
+                .prefix = "zigpkg",
+            });
+
+            const runner = try std.fs.path.join(gpa, &.{
+                tempD.abs_path,
+                runner_file,
+            });
+
+            inline for (comptime std.meta.declarations(T)) |decl| {
+                try tempD.dir.writeFile(.{
+                    .data = @field(T, decl.name),
+                    .sub_path = decl.name,
+                });
+            }
+
+            return .{
+                .temp = tempD,
+                .runner = runner,
+            };
+        }
+        pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
+            self.temp.deinit();
+            gpa.free(self.runner);
+        }
+    };
+}
+
 pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =
         \\usage: zigpkg create <deppkg.tar.gz> {build root path}
@@ -127,31 +164,16 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         return;
     }
 
-    const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0]});
+    const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0] });
     defer opt.gpa.free(output);
 
     const root = if (args.len == 2) args[1] else ".";
 
-    var tempD = try TempFile.tmpDir(.{
-        .prefix = "zigpkg",
-    });
-    defer tempD.deinit();
-
-    const runner = try std.fs.path.join(opt.gpa, &.{
-        tempD.abs_path,
-        "deppkg-runner.zig",
-    });
-    defer opt.gpa.free(runner);
-
-    inline for (comptime std.meta.declarations(Sources)) |decl| {
-        try tempD.dir.writeFile(.{
-            .data = @field(Sources, decl.name),
-            .sub_path = decl.name,
-        });
-    }
+    var buildrunner: BuildRunner(DepPkgRunner) = try .init(opt.gpa, "deppkg-runner.zig");
+    defer buildrunner.deinit(opt.gpa);
 
     var proc = std.process.Child.init(&.{
-        opt.zig_exe, "build", "--build-runner", runner, output,
+        opt.zig_exe, "build", "--build-runner", buildrunner.runner, output,
     }, opt.gpa);
     proc.stdin_behavior = .Inherit;
     proc.stdout_behavior = .Inherit;
