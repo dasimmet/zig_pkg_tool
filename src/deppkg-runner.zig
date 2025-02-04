@@ -2,8 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
-pub const targz = @import("src/pkg-targz.zig");
-const extractor_src = @embedFile("src/pkg-extractor.zig");
+pub const targz = @import("pkg-targz.zig");
+const extractor_src = @embedFile("pkg-extractor.zig");
 
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};

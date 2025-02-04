@@ -16,31 +16,46 @@ pub fn main() !void {
 
     const zig = env_map.get("ZIG") orelse "zig";
 
+    if (args.len != 2) {
+        std.log.err("usage: extractor <deppkg.tar.gz", .{});
+        return error.ArgumentsMismatch;
+    }
+
+    process(.{
+        .gpa = gpa,
+        .zig_exe = zig,
+        .filepath = args[1],
+    });
+}
+
+pub const Options = struct {
+    gpa: std.mem.Allocator,
+    zig_exe: []const u8,
+    filepath: []const u8,
+};
+
+pub fn process(opt: Options) !void {
+
     var tempD = try TempFile.tmpDir(.{
         .prefix = "extractor",
     });
     defer tempD.deinit();
 
-    var temp = std.StringHashMap(TempTar).init(gpa);
+    var temp = std.StringHashMap(TempTar).init(opt.gpa);
     // TODO: get rid of invalid pointers in TempTar when it reallocates
     // for now we avoid reallocations by oversizing
     try temp.ensureTotalCapacity(512);
     defer {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
-            gpa.free(a.hash);
+            opt.gpa.free(a.hash);
             a.tar.finish() catch @panic("tar could not be finished");
             a.tf.deinit();
         }
         temp.deinit();
     }
 
-    if (args.len != 2) {
-        std.log.err("usage: extractor <deppkg.tar.gz", .{});
-        return error.ArgumentsMismatch;
-    }
-    const filepath = args[1];
-    const fd = try std.fs.cwd().openFile(filepath, .{});
+    const fd = try std.fs.cwd().openFile(opt.filepath, .{});
     var gz = gzip.decompressor(fd.reader());
 
     var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -62,7 +77,7 @@ pub fn main() !void {
         const gop = try temp.getOrPut(prefix);
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
-                .hash = try gpa.dupe(u8, prefix[tar_prefix.len..]),
+                .hash = try opt.gpa.dupe(u8, prefix[tar_prefix.len..]),
                 .tf = try TempFile.tmpFile(.{
                     .tmp_dir = &tempD,
                     .suffix = ".tar",
@@ -106,7 +121,7 @@ pub fn main() !void {
     }
     {
         var fetch_err: ?anyerror = null;
-        var err_buf: std.ArrayList(u8) = .init(gpa);
+        var err_buf: std.ArrayList(u8) = .init(opt.gpa);
         defer err_buf.deinit();
 
         var vit = temp.valueIterator();
@@ -114,14 +129,14 @@ pub fn main() !void {
             a.tar.finish() catch @panic("tar could not be finished");
             std.log.info("zig fetch {s}", .{a.tf.abs_path});
             const res = try std.process.Child.run(.{
-                .allocator = gpa,
+                .allocator = opt.gpa,
                 .argv = &.{
-                    zig, "fetch", a.tf.abs_path,
+                    opt.zig_exe, "fetch", a.tf.abs_path,
                 },
             });
             defer {
-                gpa.free(res.stderr);
-                gpa.free(res.stdout);
+                opt.gpa.free(res.stderr);
+                opt.gpa.free(res.stdout);
             }
             if (res.term != .Exited or res.term.Exited != 0) {
                 try err_buf.writer().print("zig fetch {s}\n{s}\n{s}\n", .{

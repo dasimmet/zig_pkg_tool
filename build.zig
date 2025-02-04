@@ -41,7 +41,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = opt,
     });
-    extractor.linkLibC();
+    if (target.result.os.tag == .windows) {
+        extractor.linkLibC();
+    }
     const ext_run = b.addRunArtifact(extractor);
     ext_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
     if (b.args) |args| ext_run.addArgs(args) else {
@@ -49,6 +51,23 @@ pub fn build(b: *std.Build) void {
     }
     b.default_step.dependOn(&ext_run.step);
     b.step("extract", "extract deppkg").dependOn(&ext_run.step);
+
+
+    const zigpkg = b.addExecutable(.{
+        .name = "zigpkg",
+        .root_source_file = b.path("src/zigpkg.zig"),
+        .target = target,
+        .optimize = opt,
+    });
+    if (target.result.os.tag == .windows) {
+        zigpkg.linkLibC();
+    }
+    b.installArtifact(zigpkg);
+
+    const zigpkg_run = b.addRunArtifact(zigpkg);
+    zigpkg_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
+    if (b.args) |args| zigpkg_run.addArgs(args);
+    b.step("zigpkg", "zigpkg cli").dependOn(&zigpkg_run.step);
 }
 
 pub const DepPackageOptions = struct {
