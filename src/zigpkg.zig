@@ -16,8 +16,9 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  extract <deppkg.tar.gz>
     \\  create  <deppkg.tar.gz> {build root path}
+    \\  extract <deppkg.tar.gz> {build root output path}
+    \\  build   <deppkg.tar.gz> <intall prefix> [zig build args]
     \\
     \\environment variables:
     \\
@@ -83,6 +84,7 @@ pub fn helpArg(args: []const []const u8) bool {
 const commands = &.{
     .{ "create", cmd_create },
     .{ "extract", cmd_extract },
+    .{ "build", cmd_build },
 };
 
 const GlobalOptions = struct {
@@ -195,4 +197,11 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
             return error.Term;
         },
     }
+}
+
+
+pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !void {
+    _ = opt;
+    _ = args;
+    @panic("NOT IMPLEMENTED");
 }
