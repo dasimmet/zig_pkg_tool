@@ -11,6 +11,7 @@
         "src",
         "build.zig",
         "build.zig.zon",
+        "deppkg-runner.zig",
         "README.md",
         "LICENSE",
     },
