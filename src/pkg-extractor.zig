@@ -2,7 +2,7 @@ const std = @import("std");
 const tar = std.tar;
 const gzip = std.compress.gzip;
 const TempFile = @import("TempFile.zig");
-
+const tar_prefix = "build/p/";
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
@@ -27,7 +27,7 @@ pub fn main() !void {
     defer {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
-            if (a.hash) |h| gpa.free(h);
+            gpa.free(a.hash);
             a.tar.finish() catch @panic("tar could not be finished");
             a.tf.deinit();
         }
@@ -49,11 +49,11 @@ pub fn main() !void {
         .link_name_buffer = &link_name_buffer,
     });
     while (try t.next()) |entry| {
-        if (!std.mem.startsWith(u8, entry.name, "build/p/")) continue;
+        if (!std.mem.startsWith(u8, entry.name, tar_prefix)) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,
             entry.name,
-            "build/p/".len,
+            tar_prefix.len,
             std.fs.path.sep_str_posix,
         ) orelse entry.name.len;
         const prefix = entry.name[0..sep_idx];
@@ -61,11 +61,7 @@ pub fn main() !void {
         const gop = try temp.getOrPut(prefix);
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
-                .hash = if (std.mem.eql(
-                    u8,
-                    "build/p/",
-                    prefix[0.."build/p/".len],
-                )) try gpa.dupe(u8, prefix["build/p/".len..]) else null,
+                .hash = try gpa.dupe(u8, prefix[tar_prefix.len..]),
                 .tf = try TempFile.tmpFile(.{
                     .tmp_dir = &tempD,
                     .suffix = ".tar",
@@ -128,19 +124,15 @@ pub fn main() !void {
                 });
                 fetch_err = error.ZigFetch;
             }
-            if (a.hash) |hash| {
-                if (!std.mem.startsWith(u8, res.stdout, hash)) {
-                    try err_buf.writer().print("hash mismatch: {s}\nexpected:\"{s}\"\n  actual:\"{s}\"\n", .{
-                        a.tf.abs_path,
-                        hash,
-                        res.stdout[0..@min(res.stdout.len, hash.len)],
-                    });
-                    fetch_err = error.HashMismatch;
-                }
-                std.log.info("extracted:\n{s}\n{s}", .{ hash, res.stdout });
-            } else {
-                std.log.info("extracted:\n{s}", .{ res.stdout });
+            if (!std.mem.startsWith(u8, res.stdout, a.hash)) {
+                try err_buf.writer().print("hash mismatch: {s}\nexpected:\"{s}\"\n  actual:\"{s}\"\n", .{
+                    a.tf.abs_path,
+                    a.hash,
+                    res.stdout[0..@min(res.stdout.len, a.hash.len)],
+                });
+                fetch_err = error.HashMismatch;
             }
+            std.log.info("extracted:\n{s}\n{s}", .{ a.hash, res.stdout });
         }
         if (err_buf.items.len > 0) {
             std.log.err("{s}", .{err_buf.items});
@@ -152,6 +144,6 @@ pub fn main() !void {
 const TempTar = struct {
     tf: TempFile.TmpFile,
     name_offset: usize,
-    hash: ?[]const u8,
+    hash: []const u8,
     tar: @TypeOf(tar.writer(std.io.getStdOut().writer())),
 };
