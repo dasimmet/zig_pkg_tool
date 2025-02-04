@@ -6,14 +6,16 @@ const Sources = struct {
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
+    pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
+    pub const @"TempFile.zig" = @embedFile("TempFile.zig");
 };
 
 const usage =
     \\usage: zigpkg <subcommand> [--help]
     \\
     \\available subcommands:
-    \\  extract <package>
-    \\  create <output.tar.gz> {build root path}
+    \\  extract <deppkg.tar.gz>
+    \\  create  <deppkg.tar.gz> {build root path}
     \\
     \\environment variables:
     \\
@@ -38,6 +40,11 @@ pub fn main() !void {
         return std.process.exit(1);
     }
 
+    if (helpArg(args[1..2])) {
+        try stdout.writeAll(usage);
+        return;
+    }
+
     const opt: GlobalOptions = .{
         .gpa = gpa,
         .self_exe = args[0],
@@ -52,6 +59,19 @@ pub fn main() !void {
             return cmd[1](opt, args[2..]);
         }
     }
+
+    try stdout.writeAll(usage);
+    try stdout.writeAll("unknown command: ");
+    try stdout.writeAll(args[1]);
+    try stdout.writeAll("\n");
+    return std.process.exit(1);
+}
+
+pub fn helpArg(args: []const []const u8) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) return true;
+    }
+    return false;
 }
 
 const commands = &.{
@@ -69,12 +89,17 @@ const GlobalOptions = struct {
 };
 
 pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
+    const cmd_usage =
+        \\usage: zigpkg extract <deppkg.tar.gz>
+        \\
+    ;
     if (args.len != 1) {
-        try opt.stdout.writeAll(
-            \\usage: zigpkg extract <tar.gz filename>
-            \\
-        );
+        try opt.stdout.writeAll(cmd_usage);
         return std.process.exit(1);
+    }
+    if (helpArg(args[0..args.len])) {
+        try opt.stdout.writeAll(cmd_usage);
+        return;
     }
     try pkg_extractor.process(.{
         .gpa = opt.gpa,
@@ -84,12 +109,17 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
 }
 
 pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
+    const cmd_usage =
+        \\usage: zigpkg create <deppkg.tar.gz> {build root path}
+        \\
+    ;
     if (args.len == 0 or args.len > 2) {
-        try opt.stdout.writeAll(
-            \\usage: zigpkg create <output.tar.gz> {build root path}
-            \\
-        );
+        try opt.stdout.writeAll(cmd_usage);
         return std.process.exit(1);
+    }
+    if (helpArg(args[0..args.len])) {
+        try opt.stdout.writeAll(cmd_usage);
+        return;
     }
     const output = args[0];
     const root = if (args.len == 2) args[1] else ".";

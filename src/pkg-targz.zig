@@ -50,7 +50,7 @@ pub fn main() !void {
     defer fs_paths.deinit();
     try fs_paths.append(build_root);
 
-    try tar_paths.append("build/zig_version");
+    try tar_paths.append("build/zig_version.txt");
     const zig_version_str = try std.mem.join(
         gpa,
         "",

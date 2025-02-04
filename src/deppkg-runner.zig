@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("pkg-targz.zig");
-const extractor_src = @embedFile("pkg-extractor.zig");
 
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
@@ -21,10 +20,6 @@ pub fn main() !void {
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
-
-    // std.debug.print("args:\n", .{});
-    // for (args) |arg| std.debug.print(" {s}", .{ arg });
-    // std.debug.print("\n", .{});
 
     if (args.len != 10) {
         std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
@@ -46,17 +41,10 @@ pub fn main() !void {
     var fs_paths = std.ArrayList([]const u8).init(gpa);
     defer fs_paths.deinit();
 
-    try tar_paths.append("build/pkg-extractor.zig");
-    try fs_paths.append(try std.mem.join(
-        arena,
-        "",
-        &.{ "raw:", extractor_src },
-    ));
-
     try tar_paths.append("build/root");
     try fs_paths.append(build_root);
 
-    try tar_paths.append("build/zig_version");
+    try tar_paths.append("build/zig_version.txt");
     try fs_paths.append(try std.mem.join(
         arena,
         "",
@@ -69,7 +57,6 @@ pub fn main() !void {
         const hash = decl.name;
         const dep = @field(dependencies.packages, hash);
         if (@hasDecl(dep, "build_root")) {
-
             var j: usize = fs_paths.items.len;
             while (j > 0) : (j -= 1) {
                 const parent_check = fs_paths.items[j - 1];

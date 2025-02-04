@@ -21,7 +21,7 @@ pub fn main() !void {
         return error.ArgumentsMismatch;
     }
 
-    process(.{
+    try process(.{
         .gpa = gpa,
         .zig_exe = zig,
         .filepath = args[1],
@@ -35,7 +35,6 @@ pub const Options = struct {
 };
 
 pub fn process(opt: Options) !void {
-
     var tempD = try TempFile.tmpDir(.{
         .prefix = "extractor",
     });

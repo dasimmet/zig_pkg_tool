@@ -17,16 +17,16 @@ pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
                 // cpp17's temp_directory_path gives good reference
                 // https://en.cppreference.com/w/cpp/filesystem/temp_directory_path
                 // POSIX standard, https://en.wikipedia.org/wiki/TMPDIR
-                return std.process.getEnvVarOwned(allocator, "TMPDIR") catch {
-                    return std.process.getEnvVarOwned(allocator, "TMP") catch {
-                        return std.process.getEnvVarOwned(allocator, "TEMP") catch {
-                            return std.process.getEnvVarOwned(allocator, "TEMPDIR") catch {
-                                std.debug.print("tried env TMPDIR/TMP/TEMP/TEMPDIR but not found, fallback to /tmp, caution it may not work!", .{});
-                                return try allocator.dupe(u8, "/tmp");
-                            };
-                        };
-                    };
+                const posix_tmp_vars: []const []const u8 = &.{
+                    "TMPDIR",
+                    "TMP",
+                    "TEMP",
+                    "TEMPDIR",
                 };
+                for (posix_tmp_vars) |envvar| {
+                    return std.process.getEnvVarOwned(allocator, envvar) catch continue;
+                }
+                return try allocator.dupe(u8, "/tmp");
             }
         },
         .windows => struct {
