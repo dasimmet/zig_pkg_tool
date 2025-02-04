@@ -22,7 +22,8 @@ pub fn main() !void {
     defer tempD.deinit();
 
     var temp = std.StringHashMap(TempTar).init(gpa);
-    // TODO: get rid of pointers in TempBar
+    // TODO: get rid of invalid pointers in TempTar when it reallocates
+    // for now we avoid reallocations by oversizing
     try temp.ensureTotalCapacity(512);
     defer {
         var vit = temp.valueIterator();
