@@ -54,7 +54,7 @@ pub fn main() !void {
     const zig_version_str = try std.mem.join(
         gpa,
         "",
-        &.{ "raw:", builtin.zig_version_string },
+        &.{ "raw:", builtin.zig_version_string, "\n" },
     );
     defer gpa.free(zig_version_str);
     try fs_paths.append(zig_version_str);

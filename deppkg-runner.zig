@@ -60,7 +60,7 @@ pub fn main() !void {
     try fs_paths.append(try std.mem.join(
         arena,
         "",
-        &.{ "raw:", builtin.zig_version_string },
+        &.{ "raw:", builtin.zig_version_string, "\n" },
     ));
 
     var add_pkg_to_arc: bool = true;

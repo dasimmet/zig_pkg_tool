@@ -84,16 +84,22 @@ pub fn main() !void {
                 short_name,
                 entry.size,
                 entry.reader(),
-                .{},
+                .{
+                    .mode = entry.mode,
+                },
             ),
             .directory => try gop.value_ptr.tar.writeDir(
                 short_name,
-                .{},
+                .{
+                    .mode = entry.mode,
+                },
             ),
             .sym_link => try gop.value_ptr.tar.writeLink(
                 short_name,
                 entry.link_name,
-                .{},
+                .{
+                    .mode = entry.mode,
+                },
             ),
         }
     }
