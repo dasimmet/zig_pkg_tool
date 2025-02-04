@@ -41,15 +41,15 @@ pub fn main() !void {
     var fs_paths = std.ArrayList([]const u8).init(gpa);
     defer fs_paths.deinit();
 
-    try tar_paths.append("build/root");
-    try fs_paths.append(build_root);
-
     try tar_paths.append("build/zig_version.txt");
     try fs_paths.append(try std.mem.join(
         arena,
         "",
         &.{ "raw:", builtin.zig_version_string, "\n" },
     ));
+
+    try tar_paths.append("build/root");
+    try fs_paths.append(build_root);
 
     var add_pkg_to_arc: bool = true;
     inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {

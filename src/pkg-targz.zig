@@ -44,11 +44,9 @@ pub fn main() !void {
 
     var tar_paths = std.ArrayList([]const u8).init(gpa);
     defer tar_paths.deinit();
-    try tar_paths.append("build/root");
 
     var fs_paths = std.ArrayList([]const u8).init(gpa);
     defer fs_paths.deinit();
-    try fs_paths.append(build_root);
 
     try tar_paths.append("build/zig_version.txt");
     const zig_version_str = try std.mem.join(
@@ -58,6 +56,9 @@ pub fn main() !void {
     );
     defer gpa.free(zig_version_str);
     try fs_paths.append(zig_version_str);
+
+    try tar_paths.append("build/root");
+    try fs_paths.append(build_root);
 
     var arena_allocator = std.heap.ArenaAllocator.init(gpa);
     const arena = arena_allocator.allocator();
