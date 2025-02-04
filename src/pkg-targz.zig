@@ -152,15 +152,6 @@ pub fn process(opt: Options) !void {
 
         if (zon_file) |zf| {
             defer zf.close();
-            // TODO: import "files" filter based on "paths" once "std.zon" is available
-            // also, we could update the dependencies to a relative path inside the archive,
-            // and add top-level build.zig(.zon) files pointing to root
-            //
-            // for now we use a default "ignores" blacklist instead
-            //
-            // after extracting, ideally the generated top level file is equivalent to
-            // the root with all dependencies insourced
-
             zon_src.clearRetainingCapacity();
             try zf.reader().readAllArrayList(&zon_src, std.math.maxInt(u32));
             try zon_src.append(0);
@@ -177,7 +168,7 @@ pub fn process(opt: Options) !void {
                     .ignore_unknown_fields = true,
                 },
             ) catch |e| {
-                std.log.err("zon:\n{}", .{zonStatus});
+                std.log.err("zon: {}\n{s}/build.zig.zon:{}", .{ e, fs_path, zonStatus });
                 return e;
             };
         }
@@ -237,12 +228,16 @@ pub fn process(opt: Options) !void {
 const Manifest = struct {
     name: []const u8,
     paths: []const []const u8,
+    version: []const u8,
+    // not sure if dynamic keys are implemented in zon
+    dependencies: ?struct {
+        lazy: ?bool = null,
+        url: ?[]const u8 = null,
+        hash: ?[]const u8 = null,
+        path: ?[]const u8 = null,
+    } = null,
 
     pub fn deinit(self: Manifest, allocator: std.mem.Allocator) void {
-        allocator.free(self.name);
-        for (self.paths) |p| {
-            allocator.free(p);
-        }
-        allocator.free(self.paths);
+        std.zon.parse.free(allocator, self);
     }
 };
