@@ -45,9 +45,13 @@ pub fn main() !void {
         return;
     }
 
+    const cwd = try std.process.getCwdAlloc(gpa);
+    defer gpa.free(cwd);
+
     const opt: GlobalOptions = .{
         .gpa = gpa,
         .self_exe = args[0],
+        .cwd = cwd,
         .zig_exe = env_map.get("ZIG") orelse "zig",
         .env_map = env_map,
         .stdout = stdout,
@@ -82,6 +86,7 @@ const commands = &.{
 const GlobalOptions = struct {
     gpa: std.mem.Allocator,
     self_exe: []const u8,
+    cwd: []const u8,
     zig_exe: []const u8,
     env_map: std.process.EnvMap,
     stdout: std.io.AnyWriter,
@@ -121,7 +126,10 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         try opt.stdout.writeAll(cmd_usage);
         return;
     }
-    const output = args[0];
+
+    const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0]});
+    defer opt.gpa.free(output);
+
     const root = if (args.len == 2) args[1] else ".";
 
     var tempD = try TempFile.tmpDir(.{
@@ -150,8 +158,9 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     proc.stderr_behavior = .Inherit;
     proc.cwd = root;
     proc.env_map = &opt.env_map;
-    try proc.spawn();
-    const term = try proc.wait();
+    proc.expand_arg0 = .expand;
+
+    const term = try proc.spawnAndWait();
     switch (term) {
         .Exited => |ex| {
             if (ex != 0) {
