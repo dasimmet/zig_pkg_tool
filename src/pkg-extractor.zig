@@ -49,11 +49,11 @@ pub fn main() !void {
         .link_name_buffer = &link_name_buffer,
     });
     while (try t.next()) |entry| {
-        if (std.mem.eql(u8, "build/pkg-extractor.zig", entry.name)) continue;
+        if (!std.mem.startsWith(u8, entry.name, "build/p/")) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,
             entry.name,
-            "build/root".len,
+            "build/p/".len,
             std.fs.path.sep_str_posix,
         ) orelse entry.name.len;
         const prefix = entry.name[0..sep_idx];

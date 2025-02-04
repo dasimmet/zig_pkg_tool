@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 pub const targz = @import("src/pkg-targz.zig");
@@ -45,16 +46,22 @@ pub fn main() !void {
     var fs_paths = std.ArrayList([]const u8).init(gpa);
     defer fs_paths.deinit();
 
-    try tar_paths.append("build/root");
-    try fs_paths.append(build_root);
-
     try tar_paths.append("build/pkg-extractor.zig");
-    const ext_path = try std.mem.join(
+    try fs_paths.append(try std.mem.join(
         arena,
         "",
         &.{ "raw:", extractor_src },
-    );
-    try fs_paths.append(ext_path);
+    ));
+
+    try tar_paths.append("build/root");
+    try fs_paths.append(build_root);
+
+    try tar_paths.append("build/zig_version");
+    try fs_paths.append(try std.mem.join(
+        arena,
+        "",
+        &.{ "raw:", builtin.zig_version_string },
+    ));
 
     var add_pkg_to_arc: bool = true;
     inline for (comptime std.meta.declarations(dependencies.packages)) |decl| {

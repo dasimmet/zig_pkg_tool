@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const tar = std.tar;
 const gzip = std.compress.gzip;
 
@@ -48,6 +49,15 @@ pub fn main() !void {
     var fs_paths = std.ArrayList([]const u8).init(gpa);
     defer fs_paths.deinit();
     try fs_paths.append(build_root);
+
+    try tar_paths.append("build/zig_version");
+    const zig_version_str = try std.mem.join(
+        gpa,
+        "",
+        &.{ "raw:", builtin.zig_version_string },
+    );
+    defer gpa.free(zig_version_str);
+    try fs_paths.append(zig_version_str);
 
     var arena_allocator = std.heap.ArenaAllocator.init(gpa);
     const arena = arena_allocator.allocator();
@@ -110,6 +120,9 @@ pub fn process(opt: Options) !void {
     var archive = std.tar.writer(compress.writer().any());
     defer archive.finish() catch @panic("archive finish error");
 
+    var zon_src: std.ArrayList(u8) = .init(opt.gpa);
+    defer zon_src.deinit();
+
     for (opt.fs_paths, 0..) |fs_path, i| {
         const archive_path = opt.tar_paths[i];
 
@@ -134,7 +147,10 @@ pub fn process(opt: Options) !void {
             else => return e,
         };
         const ignores: []const []const u8 = &default_ignores;
+        var manifest: ?Manifest = null;
+
         if (zon_file) |zf| {
+            defer zf.close();
             // TODO: import "files" filter based on "paths" once "std.zon" is available
             // also, we could update the dependencies to a relative path inside the archive,
             // and add top-level build.zig(.zon) files pointing to root
@@ -143,17 +159,51 @@ pub fn process(opt: Options) !void {
             //
             // after extracting, ideally the generated top level file is equivalent to
             // the root with all dependencies insourced
-            std.debug.print("zf: {any}\n", .{zf});
-            zf.close();
+
+            zon_src.clearRetainingCapacity();
+            try zf.reader().readAllArrayList(&zon_src, std.math.maxInt(u32));
+            try zon_src.append(0);
+
+            var zonStatus: std.zon.parse.Status = .{};
+            defer zonStatus.deinit(opt.gpa);
+
+            manifest = std.zon.parse.fromSlice(
+                Manifest,
+                opt.gpa,
+                @ptrCast(zon_src.items[0 .. zon_src.items.len - 1]),
+                &zonStatus,
+                .{
+                    .ignore_unknown_fields = true,
+                },
+            ) catch |e| {
+                std.log.err("zon:\n{}", .{zonStatus});
+                return e;
+            };
+        }
+
+        defer {
+            if (manifest) |mani| {
+                mani.deinit(opt.gpa);
+            }
         }
 
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
         outer: while (try iter.next()) |entry| {
-            if (true) {
-                for (ignores) |ignore| {
-                    if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
-                        continue :outer;
+            include_entry: {
+                if (manifest) |mani| {
+                    if (std.mem.eql(u8, entry.path, "build.zig.zon")) break :include_entry;
+                    for (mani.paths) |p| {
+                        if (std.mem.startsWith(u8, entry.path, p)) {
+                            break :include_entry;
+                        }
+                    }
+                    continue :outer;
+                } else {
+                    for (ignores) |ignore| {
+                        if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
+                            continue :outer;
+                        }
                     }
                 }
             }
@@ -182,3 +232,16 @@ pub fn process(opt: Options) !void {
         }
     }
 }
+
+const Manifest = struct {
+    name: []const u8,
+    paths: []const []const u8,
+
+    pub fn deinit(self: Manifest, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        for (self.paths) |p| {
+            allocator.free(p);
+        }
+        allocator.free(self.paths);
+    }
+};
