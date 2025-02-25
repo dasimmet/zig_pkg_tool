@@ -3,10 +3,10 @@ const builtin = @import("builtin");
 const tar = std.tar;
 const gzip = std.compress.gzip;
 
-pub const default_ignores = .{
+pub const default_ignores: []const []const u8 = &.{
     "zig-cache/",
     ".zig-cache/",
-    "zig-out",
+    "zig-out/",
     ".git/",
     ".svn/",
     ".venv/",
@@ -147,7 +147,6 @@ pub fn process(opt: Options) !void {
             error.FileNotFound => null,
             else => return e,
         };
-        const ignores: []const []const u8 = &default_ignores;
         var manifest: ?Manifest = null;
 
         if (zon_file) |zf| {
@@ -192,7 +191,7 @@ pub fn process(opt: Options) !void {
                     }
                     continue :outer;
                 } else {
-                    for (ignores) |ignore| {
+                    for (default_ignores) |ignore| {
                         if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
                             continue :outer;
                         }

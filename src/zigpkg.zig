@@ -2,7 +2,7 @@ const std = @import("std");
 const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
-const DepPkgRunner = struct {
+const EmbedDepPkgRunner = struct {
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
@@ -176,7 +176,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
 
     const root = if (args.len == 2) args[1] else ".";
 
-    var buildrunner: BuildRunner(DepPkgRunner) = try .init(opt.gpa, "deppkg-runner.zig");
+    var buildrunner: BuildRunner(EmbedDepPkgRunner) = try .init(opt.gpa, "deppkg-runner.zig");
     defer buildrunner.deinit(opt.gpa);
 
     var proc = std.process.Child.init(&.{
