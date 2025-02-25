@@ -207,7 +207,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
 pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !void {
     _ = args;
     const cmd_usage =
-        \\usage: zigpkg build <deppkg.tar.gz> <install directory>
+        \\usage: zigpkg build <deppkg.tar.gz> <install directory> [zig build args]
         \\
         \\extract and build the contents from a deppkg.tar.gz directly in a temporary directory
         \\
