@@ -16,9 +16,10 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  create  <deppkg.tar.gz> {build root path}
-    \\  extract <deppkg.tar.gz> {build root output path}
-    \\  build   <deppkg.tar.gz> <intall prefix> [zig build args]
+    \\  create   <deppkg.tar.gz> {build root path}
+    \\  extract  <deppkg.tar.gz> {build root output path}
+    \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
+    \\  checkout <empty directory for git deps> {build root path} # WIP
     \\
     \\environment variables:
     \\
@@ -76,7 +77,10 @@ pub fn main() !void {
 
 pub fn helpArg(args: []const []const u8) bool {
     for (args) |arg| {
-        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) return true;
+        if (std.mem.eql(u8, arg, "--")) break;
+        inline for (&.{ "--help", "-h", "-?" }) |helparg| {
+            if (std.mem.eql(u8, arg, helparg)) return true;
+        }
     }
     return false;
 }
@@ -85,6 +89,7 @@ const commands = &.{
     .{ "create", cmd_create },
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
+    .{ "checkout", cmd_checkout },
 };
 
 const GlobalOptions = struct {
@@ -157,7 +162,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         \\usage: zigpkg create <deppkg.tar.gz> {build root path}
         \\
     ;
-    if (args.len == 0 or args.len > 2) {
+    if (args.len < 1 or args.len > 2) {
         try opt.stdout.writeAll(cmd_usage);
         return std.process.exit(1);
     }
@@ -199,9 +204,28 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     }
 }
 
-
 pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !void {
-    _ = opt;
     _ = args;
+    const cmd_usage =
+        \\usage: zigpkg build <deppkg.tar.gz> <install directory>
+        \\
+        \\extract and build the contents from a deppkg.tar.gz directly in a temporary directory
+        \\
+    ;
+    try opt.stdout.writeAll(cmd_usage);
+    @panic("NOT IMPLEMENTED");
+}
+
+pub fn cmd_checkout(opt: GlobalOptions, args: []const []const u8) !void {
+    _ = args;
+    const cmd_usage =
+        \\usage: zigpkg checkout <empty directory for git deps> {build root path} 
+        \\
+        \\git clone the git dependencies in build.zig.zon
+        \\in an empty directory, and rewrite build.zig.zon to point to
+        \\the clones
+        \\
+    ;
+    try opt.stdout.writeAll(cmd_usage);
     @panic("NOT IMPLEMENTED");
 }
