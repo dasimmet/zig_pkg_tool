@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const Manifest = @import("Manifest.zig");
 const tar = std.tar;
 const gzip = std.compress.gzip;
 
@@ -158,16 +159,12 @@ pub fn process(opt: Options) !void {
             var zonStatus: std.zon.parse.Status = .{};
             defer zonStatus.deinit(opt.gpa);
 
-            manifest = std.zon.parse.fromSlice(
-                Manifest,
+            manifest = Manifest.fromSlice(
                 opt.gpa,
                 @ptrCast(zon_src.items[0 .. zon_src.items.len - 1]),
                 &zonStatus,
-                .{
-                    .ignore_unknown_fields = true,
-                },
             ) catch |e| {
-                std.log.err("zon: {}\n{s}/build.zig.zon:{}", .{ e, fs_path, zonStatus });
+                Manifest.log(std.log.err, e, fs_path, zonStatus);
                 return e;
             };
         }
@@ -223,20 +220,3 @@ pub fn process(opt: Options) !void {
         }
     }
 }
-
-const Manifest = struct {
-    name: []const u8,
-    paths: []const []const u8,
-    version: []const u8,
-    // not sure if dynamic keys are implemented in zon
-    dependencies: ?struct {
-        lazy: ?bool = null,
-        url: ?[]const u8 = null,
-        hash: ?[]const u8 = null,
-        path: ?[]const u8 = null,
-    } = null,
-
-    pub fn deinit(self: Manifest, allocator: std.mem.Allocator) void {
-        std.zon.parse.free(allocator, self);
-    }
-};

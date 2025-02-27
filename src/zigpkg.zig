@@ -3,6 +3,7 @@ const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
 const EmbedDepPkgRunner = struct {
+    pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");

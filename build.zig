@@ -53,7 +53,6 @@ pub fn build(b: *std.Build) void {
     b.default_step.dependOn(&ext_run.step);
     b.step("extract", "extract deppkg").dependOn(&ext_run.step);
 
-
     const zigpkg = b.addExecutable(.{
         .name = "zigpkg",
         .root_source_file = b.path("src/zigpkg.zig"),
@@ -120,38 +119,22 @@ pub fn depTree(b: *std.Build) void {
     depTreeInternal(this_b);
 }
 
-pub fn depTreeInternal(b: *std.Build) void {
-    const build_runner = @import("root");
-    const deps = build_runner.dependencies;
-    const deppkg_step = b.step("deptree", "");
+fn depTreeInternal(b: *std.Build) void {
+    const deptree_step = b.step("deptree", "render tree of dependencies");
 
-    var cmd: ?*std.Build.Step.Run = null;
+    var cmd: *std.Build.Step.Run = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "--build-runner",
+    });
+    cmd.addFileArg(b.path("src/deptree-runner.zig"));
+    if (b.reference_trace) |reftr| {
+        cmd.addArg(b.fmt("-freference-trace={d}", .{reftr}));
+    }
+    if (b.verbose) cmd.addArg("--verbose");
 
-    inline for (deps.root_deps) |decl| {
-        const next_cmd = bPrint(b, "%s - %s\n", .{ decl[0], decl[1] });
-        if (cmd) |c| c.step.dependOn(&next_cmd.step);
-        cmd = next_cmd;
-        const field = @field(deps.packages, decl[1]);
-        if (@hasDecl(field, "deps")) {
-            for (field.deps) |dep_decl| {
-                const dep_next_cmd = bPrint(b, "%s - %s\n", .{ dep_decl[0], dep_decl[1] });
-                if (cmd) |c| c.step.dependOn(&dep_next_cmd.step);
-                cmd = next_cmd;
-            }
-        }
-    }
-    if (deps.root_deps.len > 0) {
-        deppkg_step.dependOn(&cmd.?.step);
-    }
-}
-
-pub fn bPrint(b: *std.Build, fmt: []const u8, args: anytype) *std.Build.Step.Run {
-    const next_cmd = b.addSystemCommand(&.{"printf"});
-    next_cmd.stdio = .inherit;
-    next_cmd.has_side_effects = true;
-    next_cmd.addArg(fmt);
-    inline for (args) |arg| {
-        next_cmd.addArg(arg);
-    }
-    return next_cmd;
+    cmd.setCwd(b.path(""));
+    cmd.has_side_effects = true;
+    cmd.stdio = .inherit;
+    deptree_step.dependOn(&cmd.step);
 }
