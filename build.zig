@@ -98,14 +98,13 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     const global_cache = b.graph.global_cache_root.path.?;
     depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE", global_cache);
 
-    const cache_prefix_len = global_cache.len + std.fs.path.sep_str.len * 2 + "p".len;
-
     inline for (comptime std.meta.declarations(deps.packages)) |decl| {
         const hash = decl.name;
         const dep = @field(deps.packages, hash);
         if (@hasDecl(dep, "build_root")) {
             if (std.mem.startsWith(u8, dep.build_root, global_cache)) {
-                const arg = b.fmt("{s}:{s}", .{ hash, dep.build_root[cache_prefix_len..] });
+                const cache_dir = std.fs.path.basename(dep.build_root);
+                const arg = b.fmt("{s}:{s}", .{ cache_dir, cache_dir });
                 depPkg.addArg(arg);
             }
         }

@@ -69,7 +69,9 @@ pub fn main() !void {
                 }
             }
             if (add_pkg_to_arc) {
-                const tar_path = try std.fmt.allocPrint(arena, "build/p/{s}", .{hash});
+                const cache_hash = std.fs.path.basename(dep.build_root);
+
+                const tar_path = try std.fmt.allocPrint(arena, "build/p/{s}", .{cache_hash});
                 try tar_paths.append(tar_path);
                 try fs_paths.append(dep.build_root);
             }

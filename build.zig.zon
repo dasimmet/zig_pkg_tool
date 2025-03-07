@@ -1,11 +1,12 @@
 .{
-    .name = "zig-menuconfig",
+    .name = .zigpkg,
     .version = "0.0.0",
+    .fingerprint = 0x28867b4578e6fd03,
     .dependencies = .{
         .vaxis = .{
             .lazy = true,
-            .url = "git+https://github.com/rockorager/libvaxis.git?ref=zig-0.14.0#fa9529029185fb2a995850fbb417103bedc9b7b8",
-            .hash = "1220b24d2e4f5b890c3c5721c50c07ae16b78ef769633ad8301563d4c249651d59a9",
+            .url = "git+https://github.com/rockorager/libvaxis.git#5b48d2c40c994363f87765fe9737d57c263275a4",
+            .hash = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
         },
     },
     .paths = .{
