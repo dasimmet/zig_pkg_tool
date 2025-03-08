@@ -156,7 +156,7 @@ pub fn process(opt: Options) !void {
             try zf.reader().readAllArrayList(&zon_src, std.math.maxInt(u32));
             try zon_src.append(0);
 
-            var zonStatus: std.zon.parse.Status = .{};
+            var zonStatus: Manifest.zonparse.Status = .{};
             defer zonStatus.deinit(opt.gpa);
 
             manifest = Manifest.fromSlice(
@@ -180,6 +180,18 @@ pub fn process(opt: Options) !void {
         outer: while (try iter.next()) |entry| {
             include_entry: {
                 if (manifest) |mani| {
+                    if (mani.dependencies) |deps| {
+                        var dep_iterator = deps.impl.iterator();
+                        while (dep_iterator.next()) |dep| {
+                            std.log.info("dep: {s} -> {s}:\n{}", .{
+                                mani.name,
+                                dep.key_ptr.*,
+                                zonfmt(dep.value_ptr.*, .{
+                                    .whitespace = true,
+                                }),
+                            });
+                        }
+                    }
                     if (std.mem.eql(u8, entry.path, "build.zig.zon")) break :include_entry;
                     for (mani.paths) |p| {
                         if (std.mem.startsWith(u8, entry.path, p)) {
@@ -219,4 +231,27 @@ pub fn process(opt: Options) !void {
             };
         }
     }
+}
+
+pub fn zonfmt(value: anytype, options: std.zon.stringify.SerializeOptions) Formatter(@TypeOf(value)) {
+    return Formatter(@TypeOf(value)){ .value = value, .options = options };
+}
+
+/// Formats the given value using stringify.
+pub fn Formatter(comptime T: type) type {
+    return struct {
+        value: T,
+        options: std.zon.stringify.SerializeOptions,
+
+        pub fn format(
+            self: @This(),
+            comptime fmt_spec: []const u8,
+            options: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            _ = fmt_spec;
+            _ = options;
+            try std.zon.stringify.serializeArbitraryDepth(self.value, self.options, writer);
+        }
+    };
 }

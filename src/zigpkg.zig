@@ -2,6 +2,7 @@ const std = @import("std");
 const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
+const Manifest = @import("Manifest.zig");
 const EmbedDepPkgRunner = struct {
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
@@ -9,6 +10,7 @@ const EmbedDepPkgRunner = struct {
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
     pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
+    pub const @"zonparse.zig" = @embedFile("zonparse.zig");
 };
 
 const usage =
@@ -17,6 +19,7 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
+    \\  tree     {build root path}
     \\  create   <deppkg.tar.gz> {build root path}
     \\  extract  <deppkg.tar.gz> {build root output path}
     \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
@@ -87,6 +90,7 @@ pub fn helpArg(args: []const []const u8) bool {
 }
 
 const commands = &.{
+    .{ "tree", cmd_tree },
     .{ "create", cmd_create },
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
@@ -102,6 +106,26 @@ const GlobalOptions = struct {
     stdout: std.io.AnyWriter,
     stderr: std.io.AnyWriter,
 };
+
+pub fn cmd_tree(opt: GlobalOptions, args: []const [:0]const u8) !void {
+    const cmd_usage =
+        \\usage: zigpkg tree {build root path}
+        \\
+    ;
+
+    if (args.len > 1) {
+        try opt.stdout.writeAll(cmd_usage);
+        return std.process.exit(1);
+    }
+    
+    const build_root: [:0]const u8 = if (args.len == 1) args[0] else "build.zig.zon";
+    var tree_iter = Manifest.iterate(build_root, opt.gpa);
+    while (try tree_iter.next()) |manifest|{
+        std.log.info("manifest: \n{any}\n", .{
+            manifest,
+        });
+    }
+}
 
 pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =

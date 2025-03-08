@@ -81,7 +81,7 @@ pub const TreeDep = struct {
                     error.FileNotFound => return null,
                     else => return err,
                 };
-                var zonStatus: std.zon.parse.Status = .{};
+                var zonStatus: zonparse.Status = .{};
                 // defer zonStatus.deinit(self.arena);
                 const zon = Manifest.fromSlice(self.arena, zon_src, &zonStatus) catch |err| {
                     Manifest.log(std.log.err, err, last.path, zonStatus);
