@@ -56,7 +56,7 @@ pub fn main() !void {
     const cwd = try std.process.getCwdAlloc(gpa);
     defer gpa.free(cwd);
 
-    const opt: GlobalOptions = .{
+    var opt: GlobalOptions = .{
         .gpa = gpa,
         .self_exe = args[0],
         .cwd = cwd,
@@ -65,6 +65,10 @@ pub fn main() !void {
         .stdout = stdout,
         .stderr = std.io.getStdErr().writer().any(),
     };
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--debug")) opt.debug_level += 1;
+        if (std.mem.eql(u8, arg, "-d")) opt.debug_level += 1;
+    }
 
     inline for (commands) |cmd| {
         if (std.mem.eql(u8, args[1], cmd[0])) {
@@ -101,6 +105,7 @@ const GlobalOptions = struct {
     gpa: std.mem.Allocator,
     self_exe: []const u8,
     cwd: []const u8,
+    debug_level: u8 = 0,
     zig_exe: []const u8,
     env_map: std.process.EnvMap,
     stdout: std.io.AnyWriter,
@@ -117,10 +122,16 @@ pub fn cmd_tree(opt: GlobalOptions, args: []const [:0]const u8) !void {
         try opt.stdout.writeAll(cmd_usage);
         return std.process.exit(1);
     }
-    
+
     const build_root: [:0]const u8 = if (args.len == 1) args[0] else "build.zig.zon";
-    var tree_iter = Manifest.iterate(build_root, opt.gpa);
-    while (try tree_iter.next()) |manifest|{
+    var mf = Manifest.ManifestFile{
+        .path = build_root,
+        .source = undefined,
+        .manifest = undefined,
+    };
+    var mf_iter = mf.iterate(opt.gpa);
+    defer mf_iter.deinit();
+    while (try mf_iter.next()) |manifest| {
         std.log.info("manifest: \n{any}\n", .{
             manifest,
         });

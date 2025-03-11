@@ -3,16 +3,17 @@ const Manifest = @This();
 pub const zonparse = @import("zonparse.zig");
 const ZonDiag = zonparse.Status;
 pub const basename = "build.zig.zon";
-
-name: []const u8,
-paths: []const []const u8,
-version: []const u8,
-dependencies: ?zonparse.ZonStructHashMap(struct {
+pub const Dependency = struct {
     lazy: ?bool = null,
     url: ?[]const u8 = null,
     hash: ?[]const u8 = null,
     path: ?[]const u8 = null,
-}) = null,
+};
+
+name: []const u8,
+paths: []const []const u8,
+version: []const u8,
+dependencies: ?zonparse.ZonStructHashMap(Dependency) = null,
 
 pub fn fromSlice(
     allocator: std.mem.Allocator,
@@ -41,79 +42,76 @@ pub fn log(logfn: LogFunction, err: anyerror, manifest_path: []const u8, diag: Z
     logfn(fmt_str, .{ @errorName(err), manifest_path, diag });
 }
 
-pub fn iterate(root: [:0]const u8, gpa: std.mem.Allocator) Iterator {
-    return .{
-        .gpa = gpa,
-        .root_path = root,
-    };
-}
-
-const ManifestFile = struct {
+pub const ManifestFile = struct {
     path: []const u8,
     source: [:0]const u8,
     manifest: Manifest,
+    fn init(path: []const u8) ManifestFile {
+        return .{
+            .path = path,
+            .source = undefined,
+            .manifest = undefined,
+        };
+    }
     fn deinit(self: @This(), allocator: std.mem.Allocator) void {
         self.manifest.deinit();
         allocator.free(self.path);
         allocator.free(self.source);
     }
-};
 
-pub const Iterator = struct {
-    gpa: std.mem.Allocator,
-    root_path: []const u8,
-    source: ?[:0]const u8 = null,
-    i: usize = 0,
-    parent: ?ManifestFile = null,
-    child: ?ManifestFile = null,
-    pub fn next(self: *@This()) !?Manifest {
-        var next_path: ?[:0]const u8 = null;
-        if (self.parent) |manifest| {
-            if (manifest.manifest.dependencies) |deps| {
-                var zon_iter = deps.impl.iterator();
-                var i: usize = 0;
-                blk: {
-                    while (zon_iter.next()) |zon_dep| : (i += 1) {
-                        if (i == self.i) {
-                            self.i += 1;
-                            if (zon_dep.value_ptr.path) |subpath| {
-                                next_path = try std.fs.path.joinZ(self.gpa, &.{
-                                    std.fs.path.dirname(manifest.path) orelse ".",
-                                    subpath[0..],
-                                    "build.zig.zon",
-                                });
-                                break :blk;
-                            }
-                        }
-                    }
-                    manifest.manifest.deinit(self.gpa);
-                    self.parent = null;
-                    next_path = null;
-                }
+    pub fn iterate(self: @This(), gpa: std.mem.Allocator) Iterator {
+        return .{
+            .gpa = gpa,
+            .root_path = self.path,
+        };
+    }
+
+    pub const Iterator = struct {
+        gpa: std.mem.Allocator,
+        root_path: []const u8,
+        i: usize = 0,
+        parent: ?ManifestFile = null,
+        child: ?ManifestFile = null,
+        zon_iterator: ?zonparse.ZonStructHashMap(Manifest.Dependency).HashMap.Iterator = null,
+        pub fn deinit(self: *@This()) void {
+            if (self.parent) |parent| {
+                _ = parent;
             }
         }
-        if (next_path) |zon_path| {
-            var zonDiag: ZonDiag = .{};
-            self.child = .{
-                .path = zon_path,
-                .source = try std.fs.cwd().readFileAllocOptions(
-                    self.gpa,
-                    zon_path,
-                    std.math.maxInt(u32),
-                    null,
-                    1,
-                    0,
-                ),
-                .manifest = undefined,
-            };
-            self.child.?.manifest = try fromSlice(self.gpa, self.source.?, &zonDiag);
 
-            if (self.parent == null) {
-                self.parent = self.child;
+        pub fn next(self: *@This()) !?ManifestFile {
+            if (self.zon_iterator) |*iter| {
+                if (iter.next()) |dependency| {
+                    const zon_dep = dependency.value_ptr;
+                    if (zon_dep.path) |subpath| {
+                        const zon_path = try std.fs.path.joinZ(self.gpa, &.{
+                            std.fs.path.dirname(self.parent.?.path) orelse ".",
+                            subpath[0..],
+                            "build.zig.zon",
+                        });
+                        var zonDiag: ZonDiag = .{};
+                        var child: ManifestFile = .{
+                            .path = zon_path,
+                            .source = try std.fs.cwd().readFileAllocOptions(
+                                self.gpa,
+                                zon_path,
+                                std.math.maxInt(u32),
+                                null,
+                                1,
+                                0,
+                            ),
+                            .manifest = undefined,
+                        };
+                        child.manifest = try fromSlice(self.gpa, child.source, &zonDiag);
+                        return child;
+                    }
+                }
+                self.zon_iterator = null;
             }
-            return self.child.?.manifest;
-        } else {
+            if (self.parent) |parent| {
+                _ = parent;
+            }
             return null;
         }
-    }
+    };
 };
