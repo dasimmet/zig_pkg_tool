@@ -1,4 +1,5 @@
 const std = @import("std");
+// const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -49,6 +50,9 @@ pub fn build(b: *std.Build) void {
 
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigpkg_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
+    zigpkg_run.setEnvironmentVariable("ZIG_LIB_DIR", b.lib_dir);
+    zigpkg_run.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", b.cache_root.path.?);
+    zigpkg_run.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", b.graph.global_cache_root.path.?);
     if (b.args) |args| zigpkg_run.addArgs(args);
     b.step("zigpkg", "zigpkg cli").dependOn(&zigpkg_run.step);
 
@@ -59,22 +63,46 @@ pub fn build(b: *std.Build) void {
     b.step("test", "run tests").dependOn(&test_run.step);
     b.default_step.dependOn(&test_run.step);
     {
-        const dotgraph = b.addRunArtifact(zigpkg);
-        dotgraph.addArgs(&.{
-            "dot",
-            b.build_root.path.?,
+        const dotgraph = dotGraphInternal(b, zigpkg, &.{
             "install",
             "dot",
         });
+        const svggraph = svgGraph(b, dotgraph);
 
-        const svggraph = b.addSystemCommand(&.{"dot", "-Tsvg"});
-        const svggraph_out = svggraph.addPrefixedOutputFileArg("-o", "graph.svg");
-        svggraph.addFileArg(dotgraph.captureStdOut());
         const update_dotgraph = b.addUpdateSourceFiles();
-        update_dotgraph.addCopyFileToSource(dotgraph.captureStdOut(), "graph.dot");
-        update_dotgraph.addCopyFileToSource(svggraph_out, "graph.svg");
+        update_dotgraph.addCopyFileToSource(dotgraph, "graph.dot");
+        update_dotgraph.addCopyFileToSource(svggraph, "graph.svg");
         b.step("dot", "generate dot graph").dependOn(&update_dotgraph.step);
     }
+}
+
+pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath {
+    const svggraph = b.addSystemCommand(&.{ "dot", "-Tsvg" });
+    svggraph.setName("dot to svg");
+    const svggraph_out = svggraph.addPrefixedOutputFileArg("-o", "graph.svg");
+    svggraph.addFileArg(dotgraph);
+    return svggraph_out;
+}
+
+pub fn dotGraph(b: *std.Build, args: []const []const u8) std.Build.LazyPath {
+    const zigpkg = b.dependency("zig_pkg_tool", .{}).artifact("zigpkg");
+    return dotGraphInternal(b, zigpkg, args);
+}
+
+fn dotGraphInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []const []const u8) std.Build.LazyPath {
+    const dotgraph = b.addRunArtifact(zigpkg);
+    dotgraph.setName("dot generation");
+    dotgraph.addArgs(&.{
+        "dot",
+        b.build_root.path.?,
+    });
+    dotgraph.setEnvironmentVariable("ZIG", b.graph.zig_exe);
+    dotgraph.setEnvironmentVariable("ZIG_LIB_DIR", b.lib_dir);
+    dotgraph.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", b.cache_root.path.?);
+    dotgraph.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", b.graph.global_cache_root.path.?);
+    
+    dotgraph.addArgs(args);
+    return dotgraph.captureStdOut();
 }
 
 pub const DepPackageOptions = struct {
