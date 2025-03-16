@@ -25,8 +25,6 @@ pub fn build(b: *std.Build) void {
     const config_step = b.step("menuconfig", "example menu");
     config_step.dependOn(&run.step);
 
-    depTreeInternal(b);
-
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
     const depPkgArc = depPackagesInternal(b, .{ .name = "depkg" });
     const depPkgInstall = b.addInstallFile(
@@ -35,23 +33,6 @@ pub fn build(b: *std.Build) void {
     );
     b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
-
-    const extractor = b.addExecutable(.{
-        .name = "pkg-extractor",
-        .root_source_file = b.path("src/pkg-extractor.zig"),
-        .target = target,
-        .optimize = opt,
-    });
-    if (target.result.os.tag == .windows) {
-        extractor.linkLibC();
-    }
-    const ext_run = b.addRunArtifact(extractor);
-    ext_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
-    if (b.args) |args| ext_run.addArgs(args) else {
-        ext_run.addFileArg(depPkgArc);
-    }
-    b.default_step.dependOn(&ext_run.step);
-    b.step("extract", "extract deppkg").dependOn(&ext_run.step);
 
     const zigpkg = b.addExecutable(.{
         .name = "zigpkg",
@@ -111,29 +92,4 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     }
 
     return depPkgOut;
-}
-
-pub fn depTree(b: *std.Build) void {
-    const this_b = b.dependencyFromBuildZig(@This(), {}).builder;
-    depTreeInternal(this_b);
-}
-
-fn depTreeInternal(b: *std.Build) void {
-    const deptree_step = b.step("deptree", "render tree of dependencies");
-
-    var cmd: *std.Build.Step.Run = b.addSystemCommand(&.{
-        b.graph.zig_exe,
-        "build",
-        "--build-runner",
-    });
-    cmd.addFileArg(b.path("src/deptree-runner.zig"));
-    if (b.reference_trace) |reftr| {
-        cmd.addArg(b.fmt("-freference-trace={d}", .{reftr}));
-    }
-    if (b.verbose) cmd.addArg("--verbose");
-
-    cmd.setCwd(b.path(""));
-    cmd.has_side_effects = true;
-    cmd.stdio = .inherit;
-    deptree_step.dependOn(&cmd.step);
 }

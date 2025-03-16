@@ -47,12 +47,12 @@ pub fn printStep(b: *std.Build, step: *std.Build.Step, depth: usize, i: usize) !
     _ = depth;
     _ = i;
     const stdout = std.io.getStdOut().writer();
+    
+    try stdout.print("\"{x}\" [label=\"{s}\"]\n", .{@intFromPtr(step), step.name});
     for (step.dependencies.items) |dep_step| {
-        try stdout.print("\"{x} {s}\" -> \"{x} {s}\"\n", .{
+        try stdout.print("\"{x}\" -> \"{x}\"\n", .{
             @intFromPtr(step),
-            step.name,
             @intFromPtr(dep_step),
-            dep_step.name,
         });
     }
     // return printStructStdout(.{

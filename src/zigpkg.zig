@@ -8,7 +8,7 @@ const EmbedRunnerSources = struct {
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"runner-deppkg.zig" = @embedFile("runner-deppkg.zig");
-    pub const @"runner-listdeps.zig" = @embedFile("runner-listdeps.zig");
+    pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
     pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
@@ -21,7 +21,7 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  tree     {build root path}
+    \\  dot      <build root path> [zig build args]
     \\  create   <deppkg.tar.gz> {build root path}
     \\  extract  <deppkg.tar.gz> {build root output path}
     \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
@@ -96,7 +96,7 @@ pub fn helpArg(args: []const []const u8) bool {
 }
 
 const commands = &.{
-    .{ "tree", cmd_tree },
+    .{ "dot", cmd_dot },
     .{ "create", cmd_create },
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
@@ -213,14 +213,28 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     defer opt.gpa.free(output);
 
     const root = if (args.len == 2) args[1] else ".";
-    return cmd_runner(opt, "runner-deppkg.zig", root, &.{output});
+    return runnerCommand(opt, "runner-deppkg.zig", root, &.{output});
 }
 
-pub fn cmd_tree(opt: GlobalOptions, args: []const []const u8) !void {
-    return cmd_runner(opt, "runner-listdeps.zig", ".", args);
+pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
+    var arg_sep: usize = 0;
+    var root: []const u8 = ".";
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--")) {
+            arg_sep += 1;
+            break;
+        } else if (arg_sep == 0) {
+            arg_sep += 1;
+            root = arg;
+        } else {
+            std.log.err("unknown argument: {s}", .{arg});
+            return error.UnknownArgument;
+        }
+    }
+    return runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
 }
 
-pub fn cmd_runner(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
+pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
     var buildrunner: BuildRunner(EmbedRunnerSources) = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
