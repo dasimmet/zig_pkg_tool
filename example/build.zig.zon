@@ -24,7 +24,7 @@
     // original project's identity. Thus it is recommended to leave the comment
     // on the following line intact, so that it shows up in code reviews that
     // modify the field.
-    .fingerprint = 0x6eec9b9f016bf67b, // Changing this has security and trust implications.
+    .fingerprint = 0x6eec9b9fd25f1eba, // Changing this has security and trust implications.
 
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
@@ -65,6 +65,9 @@
         //    // actually used.
         //    .lazy = false,
         //},
+        .zig_pkg_tool = .{
+            .path = "..",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.

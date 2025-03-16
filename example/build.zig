@@ -113,4 +113,13 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
+
+    const zig_pkg_tool = @import("zig_pkg_tool");
+    const svggraph = zig_pkg_tool.svgGraph(b, zig_pkg_tool.dotGraph(b, &.{
+        "install",
+        "dot",
+        "test",
+        "run",
+    }));
+    b.step("dot", "install graph.svg").dependOn(&b.addInstallFile(svggraph, "graph.svg").step);
 }
