@@ -49,10 +49,8 @@ pub fn build(b: *std.Build) void {
     zigpkg.root_module.addImport("known-folders", known_folders);
 
     const zigpkg_run = b.addRunArtifact(zigpkg);
-    zigpkg_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
-    zigpkg_run.setEnvironmentVariable("ZIG_LIB_DIR", b.lib_dir);
-    zigpkg_run.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", b.cache_root.path.?);
-    zigpkg_run.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", b.graph.global_cache_root.path.?);
+    zigRunEnv(b, zigpkg_run);
+
     if (b.args) |args| zigpkg_run.addArgs(args);
     b.step("zigpkg", "zigpkg cli").dependOn(&zigpkg_run.step);
 
@@ -66,6 +64,7 @@ pub fn build(b: *std.Build) void {
         const dotgraph = dotGraphInternal(b, zigpkg, &.{
             "install",
             "dot",
+            "test",
         });
         const svggraph = svgGraph(b, dotgraph);
 
@@ -96,13 +95,23 @@ fn dotGraphInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []cons
         "dot",
         b.build_root.path.?,
     });
-    dotgraph.setEnvironmentVariable("ZIG", b.graph.zig_exe);
-    dotgraph.setEnvironmentVariable("ZIG_LIB_DIR", b.lib_dir);
-    dotgraph.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", b.cache_root.path.?);
-    dotgraph.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", b.graph.global_cache_root.path.?);
+    zigRunEnv(b, dotgraph);
     
     dotgraph.addArgs(args);
     return dotgraph.captureStdOut();
+}
+
+fn zigRunEnv(b: *std.Build, run: *std.Build.Step.Run) void {
+    run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
+    if (b.graph.zig_lib_directory.path) |lib_dir| {
+        run.setEnvironmentVariable("ZIG_LIB_DIR", lib_dir);
+    }
+    if (b.cache_root.path) |cache_root| {
+        run.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", cache_root);
+    }
+    if (b.graph.global_cache_root.path) |cache_root| {
+        run.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", cache_root);
+    }
 }
 
 pub const DepPackageOptions = struct {

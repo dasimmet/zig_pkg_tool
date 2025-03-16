@@ -33,8 +33,10 @@ digraph {
 "N16" [label="UpdateSourceFiles"]
 "N16" -> "N17"
 "N16" -> "N18"
-"N17" [label="run zigpkg"]
+"N17" [label="dot generation"]
 "N17" -> "N13"
-"N18" [label="run dot (graph.svg)"]
+"N18" [label="dot to svg"]
 "N18" -> "N17"
+"N19" [label="test"]
+"N19" -> "N4"
 }
