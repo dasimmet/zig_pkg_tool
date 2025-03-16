@@ -226,6 +226,7 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
         } else if (arg_sep == 0) {
             arg_sep += 1;
             root = arg;
+            break;
         } else {
             std.log.err("unknown argument: {s}", .{arg});
             return error.UnknownArgument;
