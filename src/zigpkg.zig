@@ -4,12 +4,14 @@ const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
 const Manifest = @import("Manifest.zig");
 const EmbedDepPkgRunner = struct {
-    pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
-    pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
+    pub const @"deptree-runner.zig" = @embedFile("deptree-runner.zig");
+    pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
-    pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
+    pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
+    pub const @"zig_build_runner.zig" = @embedFile("zig_build_runner.zig");
+    pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
     pub const @"zonparse.zig" = @embedFile("zonparse.zig");
 };
 
