@@ -26,12 +26,11 @@ pub fn ZonStructHashMap(comptime T: type) type {
         impl: HashMap = .empty,
     };
 }
-pub inline fn isZonStructHashMap(comptime T: type) bool {
-    if (@typeInfo(T) != .@"struct") return false;
-    if (@hasDecl(T, "Value") and @TypeOf(T.Value) == type) {
-        return T == ZonStructHashMap(T.Value);
-    }
-    return false;
+
+pub inline fn isZonStructHashMap(comptime OTHER_T: type) bool {
+    if (@typeInfo(OTHER_T) != .@"struct") return false;
+    if (!@hasDecl(OTHER_T, "Value") or @TypeOf(OTHER_T.Value) != type) return false;
+    return OTHER_T == ZonStructHashMap(OTHER_T.Value);
 }
 
 /// Rename when adding or removing support for a type.
@@ -41,6 +40,8 @@ const valid_types = {};
 pub const Options = struct {
     /// If true, unknown fields do not error.
     ignore_unknown_fields: bool = false,
+    /// enables parsing enum literal into []const u8
+    enum_literals_as_string: bool = false,
     /// If true, the parser cleans up partially parsed values on error. This requires some extra
     /// bookkeeping, so you may want to turn it off if you don't need this feature (e.g. because
     /// you're using arena allocation.)
@@ -210,16 +211,15 @@ pub const Error = union(enum) {
         return .{ .err = self, .status = status };
     }
 
-    fn zoirErrorLocation(ast: Ast, maybe_token: Ast.TokenIndex, node_or_offset: u32) Ast.Location {
-        if (maybe_token == Zoir.CompileError.invalid_token) {
-            const main_tokens = ast.nodes.items(.main_token);
-            const ast_node = node_or_offset;
-            const token = main_tokens[ast_node];
-            return ast.tokenLocation(0, token);
-        } else {
-            var location = ast.tokenLocation(0, maybe_token);
+    fn zoirErrorLocation(ast: Ast, maybe_token: Ast.OptionalTokenIndex, node_or_offset: u32) Ast.Location {
+        if (maybe_token.unwrap()) |token| {
+            var location = ast.tokenLocation(0, token);
             location.column += node_or_offset;
             return location;
+        } else {
+            const ast_node: Ast.Node.Index = @enumFromInt(node_or_offset);
+            const token = ast.nodeMainToken(ast_node);
+            return ast.tokenLocation(0, token);
         }
     }
 };
@@ -643,6 +643,7 @@ const Parser = struct {
             .array_literal => |nodes| return self.parseSlice(T, nodes),
             .empty_literal => return self.parseSlice(T, .{ .start = node, .len = 0 }),
             .enum_literal => |field_name| {
+                if (!self.options.enum_literals_as_string) return error.WrongType;
                 const pointer = @typeInfo(T).pointer;
                 if (pointer.child != u8 or
                     pointer.size != .slice or
@@ -652,7 +653,11 @@ const Parser = struct {
                 {
                     return error.WrongType;
                 }
-                return self.gpa.dupe(pointer.child, field_name.get(self.zoir)[0..]);
+                if (pointer.sentinel()) |_| {
+                    return self.gpa.dupeZ(u8, field_name.get(self.zoir));
+                } else {
+                    return self.gpa.dupe(u8, field_name.get(self.zoir));
+                }
             },
             else => return error.WrongType,
         }
@@ -669,7 +674,7 @@ const Parser = struct {
         switch (try ZonGen.parseStrLit(self.ast, ast_node, buf.writer(self.gpa))) {
             .success => {},
             .failure => |err| {
-                const token = self.ast.nodes.items(.main_token)[ast_node];
+                const token = self.ast.nodeMainToken(ast_node);
                 const raw_string = self.ast.tokenSlice(token);
                 return self.failTokenFmt(token, @intCast(err.offset()), "{s}", .{err.fmt(raw_string)});
             },
@@ -1067,8 +1072,7 @@ const Parser = struct {
         args: anytype,
     ) error{ OutOfMemory, ParseZon } {
         @branchHint(.cold);
-        const main_tokens = self.ast.nodes.items(.main_token);
-        const token = main_tokens[node.getAstNode(self.zoir)];
+        const token = self.ast.nodeMainToken(node.getAstNode(self.zoir));
         return self.failTokenFmt(token, 0, fmt, args);
     }
 
@@ -1087,8 +1091,7 @@ const Parser = struct {
         message: []const u8,
     ) error{ParseZon} {
         @branchHint(.cold);
-        const main_tokens = self.ast.nodes.items(.main_token);
-        const token = main_tokens[node.getAstNode(self.zoir)];
+        const token = self.ast.nodeMainToken(node.getAstNode(self.zoir));
         return self.failToken(.{
             .token = token,
             .offset = 0,
@@ -1121,10 +1124,7 @@ const Parser = struct {
             const struct_init = self.ast.fullStructInit(&buf, node.getAstNode(self.zoir)).?;
             const field_node = struct_init.ast.fields[f];
             break :b self.ast.firstToken(field_node) - 2;
-        } else b: {
-            const main_tokens = self.ast.nodes.items(.main_token);
-            break :b main_tokens[node.getAstNode(self.zoir)];
-        };
+        } else self.ast.nodeMainToken(node.getAstNode(self.zoir));
         switch (@typeInfo(T)) {
             inline .@"struct", .@"union", .@"enum" => |info| {
                 const note: Error.TypeCheckFailure.Note = if (info.fields.len == 0) b: {
@@ -2107,6 +2107,37 @@ test "std.zon arrays and slices" {
             "{}",
             .{status},
         );
+    }
+}
+test "std.zon enum as string" {
+    const gpa = std.testing.allocator;
+    // bare literal
+    {
+        const parsed = try fromSlice([:0]const u8, gpa, ".my_enum_literal", null, .{
+            .enum_literals_as_string = true,
+        });
+        defer free(gpa, parsed);
+        try std.testing.expectEqualStrings(@as([:0]const u8, "my_enum_literal"), parsed);
+    }
+    // quoted enum literal with a " special character
+    {
+        const parsed = try fromSlice([]const u8, gpa, ".@\"test\\\"\"", null, .{
+            .enum_literals_as_string = true,
+        });
+        defer free(gpa, parsed);
+        try std.testing.expectEqualStrings(@as([]const u8, "test\""), parsed);
+    }
+    // bare literal in struct
+    {
+        const parsed = try fromSlice(struct {
+            name: []const u8,
+            type: []const u8,
+        }, gpa, ".{.name = .literal_0, .type=.literal_1}", null, .{
+            .enum_literals_as_string = true,
+        });
+        defer free(gpa, parsed);
+        try std.testing.expectEqualStrings(@as([]const u8, "literal_0"), parsed.name);
+        try std.testing.expectEqualStrings(@as([]const u8, "literal_1"), parsed.type);
     }
 }
 
