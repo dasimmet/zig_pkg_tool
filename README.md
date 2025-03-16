@@ -1,10 +1,16 @@
-# Zig Menuconfig
+# Zig Package tool
 
-a graphical configuration system, alike the linux kernel's `make menuconfig`
-for the zig build system
 
 ## Usage
 
 ```
-zig build menuconfig
+zig build zigpkg -- --help
 ```
+
+## Graphviz dependency graph
+
+```
+zig build zigpkg -- dot | dot -x -Gbgcolor=transparent -Tsvg > graph.svg
+```
+
+![Build Graph](graph.svg)
