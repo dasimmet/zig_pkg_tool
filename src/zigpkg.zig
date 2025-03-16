@@ -21,7 +21,7 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  dot      <build root path> [zig build args]
+    \\  dot      <build root path> [--] [zig build args]
     \\  create   <deppkg.tar.gz> {build root path}
     \\  extract  <deppkg.tar.gz> {build root output path}
     \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP

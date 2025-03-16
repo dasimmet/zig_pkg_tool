@@ -14,45 +14,61 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
     const stdout = std.io.getStdOut().writer();
     try stdout.writeAll("digraph {\n");
     if (targets.len == 0) {
-        try iterate_steps(b, &b.default_step.*, 0, true, &printStep);
+        try iterate_steps(b, &b.default_step.*, 0, &printStep);
     } else {
         for (targets) |target| {
             if (b.top_level_steps.get(target)) |step| {
-                try iterate_steps(b, &step.step, 0, true, &printStep);
+                try iterate_steps(b, &step.step, 0, &printStep);
             }
         }
     }
     try stdout.writeAll("}\n");
 }
 
-pub const DepFn = fn (*std.Build, *std.Build.Step, usize, usize) anyerror!void;
+pub const DepFn = fn (*std.Build, *std.Build.Step, usize, u32) anyerror!void;
 
-var iterator: usize = 0;
-pub fn iterate_steps(b: *std.Build, step: *std.Build.Step, depth: usize, once: bool, depfn: *const DepFn) !void {
-    if (once) {
-        if (step.state == .success) return;
-        step.state = .success;
+var iterator: u32 = 0;
+var dotMap: std.AutoHashMapUnmanaged(usize, struct {
+    id: u32,
+    visited: bool,
+}) = .empty;
+pub fn iterate_steps(b: *std.Build, step: *std.Build.Step, depth: usize, depfn: *const DepFn) !void {
+    const dot_entry = try dotMap.getOrPut(b.allocator, @intFromPtr(step));
+    if (dot_entry.found_existing) {
+        if (dot_entry.value_ptr.visited) return;
+        dot_entry.value_ptr.visited = true;
+    } else {
+        dot_entry.value_ptr.* = .{
+            .id = iterator,
+            .visited = true,
+        };
+        iterator += 1;
     }
 
-    try depfn(b, step, depth, iterator);
+    try depfn(b, step, depth, dot_entry.value_ptr.*.id);
 
-    iterator += 1;
     for (step.dependencies.items) |dep_step| {
-        try iterate_steps(b, dep_step, depth + 1, once, depfn);
+        try iterate_steps(b, dep_step, depth + 1, depfn);
     }
 }
 
-pub fn printStep(b: *std.Build, step: *std.Build.Step, depth: usize, i: usize) !void {
-    _ = b;
+pub fn printStep(b: *std.Build, step: *std.Build.Step, depth: usize, i: u32) !void {
     _ = depth;
-    _ = i;
     const stdout = std.io.getStdOut().writer();
-    
-    try stdout.print("\"{x}\" [label=\"{s}\"]\n", .{@intFromPtr(step), step.name});
+
+    try stdout.print("\"N{d}\" [label=\"{s}\"]\n", .{ i, step.name });
     for (step.dependencies.items) |dep_step| {
-        try stdout.print("\"{x}\" -> \"{x}\"\n", .{
-            @intFromPtr(step),
-            @intFromPtr(dep_step),
+        const dot_entry = try dotMap.getOrPut(b.allocator, @intFromPtr(dep_step));
+        if (!dot_entry.found_existing) {
+            dot_entry.value_ptr.* = .{
+                .id = iterator,
+                .visited = false,
+            };
+            iterator += 1;
+        }
+        try stdout.print("\"N{d}\" -> \"N{d}\"\n", .{
+            i,
+            dot_entry.value_ptr.id,
         });
     }
     // return printStructStdout(.{

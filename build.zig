@@ -44,11 +44,20 @@ pub fn build(b: *std.Build) void {
         zigpkg.linkLibC();
     }
     b.installArtifact(zigpkg);
+    const known_folders = b.dependency("known_folders", .{}).module("known-folders");
+    zigpkg.root_module.addImport("known-folders", known_folders);
 
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigpkg_run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
     if (b.args) |args| zigpkg_run.addArgs(args);
     b.step("zigpkg", "zigpkg cli").dependOn(&zigpkg_run.step);
+
+    const tests = b.addTest(.{
+        .root_module = zigpkg.root_module,
+    });
+    const test_run = b.addRunArtifact(tests);
+    b.step("test", "run tests").dependOn(&test_run.step);
+    b.default_step.dependOn(&test_run.step);
 }
 
 pub const DepPackageOptions = struct {

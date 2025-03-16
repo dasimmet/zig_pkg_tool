@@ -8,6 +8,10 @@
             .url = "git+https://github.com/rockorager/libvaxis.git#5b48d2c40c994363f87765fe9737d57c263275a4",
             .hash = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
         },
+        .known_folders = .{
+            .url = "git+https://github.com/ziglibs/known-folders.git#aa24df42183ad415d10bc0a33e6238c437fc0f59",
+            .hash = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+        },
     },
     .paths = .{
         "src",

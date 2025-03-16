@@ -5,6 +5,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const testing = std.testing;
 const ThisModule = @This();
+const known_folders = @import("known-folders");
 
 const random_bytes_count = 12;
 const random_path_len = std.fs.base64_encoder.calcSize(random_bytes_count);
