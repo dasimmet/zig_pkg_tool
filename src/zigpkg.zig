@@ -3,14 +3,14 @@ const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
 const Manifest = @import("Manifest.zig");
-const EmbedDepPkgRunner = struct {
-    pub const @"deppkg-runner.zig" = @embedFile("deppkg-runner.zig");
-    pub const @"deptree-runner.zig" = @embedFile("deptree-runner.zig");
+const EmbedRunnerSources = struct {
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
+    pub const @"runner-deppkg.zig" = @embedFile("runner-deppkg.zig");
+    pub const @"runner-listdeps.zig" = @embedFile("runner-listdeps.zig");
+    pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
-    pub const @"zig_build_runner.zig" = @embedFile("zig_build_runner.zig");
     pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
     pub const @"zonparse.zig" = @embedFile("zonparse.zig");
 };
@@ -114,31 +114,31 @@ const GlobalOptions = struct {
     stderr: std.io.AnyWriter,
 };
 
-pub fn cmd_tree(opt: GlobalOptions, args: []const [:0]const u8) !void {
-    const cmd_usage =
-        \\usage: zigpkg tree {build root path}
-        \\
-    ;
+// pub fn cmd_tree(opt: GlobalOptions, args: []const [:0]const u8) !void {
+//     const cmd_usage =
+//         \\usage: zigpkg tree {build root path}
+//         \\
+//     ;
 
-    if (args.len > 1) {
-        try opt.stdout.writeAll(cmd_usage);
-        return std.process.exit(1);
-    }
+//     if (args.len > 1) {
+//         try opt.stdout.writeAll(cmd_usage);
+//         return std.process.exit(1);
+//     }
 
-    const build_root: [:0]const u8 = if (args.len == 1) args[0] else "build.zig.zon";
-    var mf = Manifest.ManifestFile{
-        .path = build_root,
-        .source = undefined,
-        .manifest = undefined,
-    };
-    var mf_iter = mf.iterate(opt.gpa);
-    defer mf_iter.deinit();
-    while (try mf_iter.next()) |manifest| {
-        std.log.info("manifest: \n{any}\n", .{
-            manifest,
-        });
-    }
-}
+//     const build_root: [:0]const u8 = if (args.len == 1) args[0] else "build.zig.zon";
+//     var mf = Manifest.ManifestFile{
+//         .path = build_root,
+//         .source = undefined,
+//         .manifest = undefined,
+//     };
+//     var mf_iter = mf.iterate(opt.gpa);
+//     defer mf_iter.deinit();
+//     while (try mf_iter.next()) |manifest| {
+//         std.log.info("manifest: \n{any}\n", .{
+//             manifest,
+//         });
+//     }
+// }
 
 pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =
@@ -213,13 +213,25 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     defer opt.gpa.free(output);
 
     const root = if (args.len == 2) args[1] else ".";
+    return cmd_runner(opt, "runner-deppkg.zig", root, &.{output});
+}
 
-    var buildrunner: BuildRunner(EmbedDepPkgRunner) = try .init(opt.gpa, "deppkg-runner.zig");
+pub fn cmd_tree(opt: GlobalOptions, args: []const []const u8) !void {
+    return cmd_runner(opt, "runner-listdeps.zig", ".", args);
+}
+
+pub fn cmd_runner(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
+    var buildrunner: BuildRunner(EmbedRunnerSources) = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
-    var proc = std.process.Child.init(&.{
-        opt.zig_exe, "build", "--build-runner", buildrunner.runner, output,
-    }, opt.gpa);
+    var argv = std.ArrayList([]const u8).init(opt.gpa);
+    defer argv.deinit();
+    try argv.appendSlice(&.{
+        opt.zig_exe, "build", "--build-runner", buildrunner.runner,
+    });
+    try argv.appendSlice(args);
+
+    var proc = std.process.Child.init(argv.items, opt.gpa);
     proc.stdin_behavior = .Inherit;
     proc.stdout_behavior = .Inherit;
     proc.stderr_behavior = .Inherit;

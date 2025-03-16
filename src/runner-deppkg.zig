@@ -25,12 +25,6 @@ pub fn main() !void {
         std.log.err("usage: zig build --build-runner <path to runner> <output file>", .{});
         return;
     }
-    // if (true) {
-    //     return try @import("zig_build_runner.zig").mainBuild(.{
-    //         .executeBuildFn = no_build,
-    //         .ctx = undefined,
-    //     });
-    // }
 
     const zig_exe = args[1];
     _ = zig_exe;
@@ -91,35 +85,4 @@ pub fn main() !void {
         .fs_paths = fs_paths.items,
     });
     std.log.info("written deppk tar.gz: {s}", .{output_file});
-}
-
-pub fn no_build(b: *std.Build, ctx: ?*anyopaque) !void {
-    _ = ctx;
-    for (b.available_deps) |d| {
-        std.log.info("dep: {s}:{s}", .{d[0], d[1]});
-    }
-    print_dep_steps(b, &b.install_tls.step, 0);
-}
-
-var i: usize = 0;
-pub fn print_dep_steps(b: *std.Build, step: *std.Build.Step, depth: usize) !void {
-    if (step.state == .success) return;
-    step.state = .success;
-    
-    const stdout = std.io.getStdOut();
-    try std.zon.stringify.serializeArbitraryDepth(.{
-        .i = i,
-        .depth = depth,
-        .name = step.name,
-        .build_root = step.owner.build_root.path.?,
-    }, .{
-        .whitespace = true,
-    }, stdout.writer());
-    try stdout.writer().writeAll("\n");
-    // std.log.info("step {d} {d}: {s}", .{i, depth, step.name});
-    // std.log.info("owner: {s}", .{});
-    i += 1;
-    for (step.dependencies.items) |dep_step| {
-        try print_dep_steps(b, dep_step, depth + 1);
-    }
 }
