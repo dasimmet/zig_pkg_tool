@@ -61,11 +61,11 @@ pub fn build(b: *std.Build) void {
     b.step("test", "run tests").dependOn(&test_run.step);
     b.default_step.dependOn(&test_run.step);
     {
-        const dotgraph = dotGraphInternal(b, zigpkg, &.{
+        const dotgraph = dotGraphStepInternal(b, zigpkg, &.{
             "install",
             "dot",
             "test",
-        });
+        }).captureStdOut();
         const svggraph = svgGraph(b, dotgraph);
 
         const update_dotgraph = b.addUpdateSourceFiles();
@@ -83,12 +83,12 @@ pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath 
     return svggraph_out;
 }
 
-pub fn dotGraph(b: *std.Build, args: []const []const u8) std.Build.LazyPath {
+pub fn dotGraphStep(b: *std.Build, args: []const []const u8) *std.Build.Step.Run {
     const zigpkg = b.dependency("zig_pkg_tool", .{}).artifact("zigpkg");
-    return dotGraphInternal(b, zigpkg, args);
+    return dotGraphStepInternal(b, zigpkg, args);
 }
 
-fn dotGraphInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []const []const u8) std.Build.LazyPath {
+fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []const []const u8) *std.Build.Step.Run {
     const dotgraph = b.addRunArtifact(zigpkg);
     dotgraph.setName("dot generation");
     dotgraph.addArgs(&.{
@@ -98,7 +98,7 @@ fn dotGraphInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []cons
     zigRunEnv(b, dotgraph);
     
     dotgraph.addArgs(args);
-    return dotgraph.captureStdOut();
+    return dotgraph;
 }
 
 fn zigRunEnv(b: *std.Build, run: *std.Build.Step.Run) void {

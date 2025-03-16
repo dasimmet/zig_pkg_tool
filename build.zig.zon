@@ -1,7 +1,7 @@
 .{
-    .name = .zig_pkg_tool,
+    .name = .pkg_tool,
     .version = "0.0.0",
-    .fingerprint = 0x8b05995328122d11,
+    .fingerprint = 0xeec6d0d326821008,
     .dependencies = .{
         .vaxis = .{
             .lazy = true,
