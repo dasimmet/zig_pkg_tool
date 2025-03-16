@@ -58,6 +58,23 @@ pub fn build(b: *std.Build) void {
     const test_run = b.addRunArtifact(tests);
     b.step("test", "run tests").dependOn(&test_run.step);
     b.default_step.dependOn(&test_run.step);
+    {
+        const dotgraph = b.addRunArtifact(zigpkg);
+        dotgraph.addArgs(&.{
+            "dot",
+            b.build_root.path.?,
+            "install",
+            "dot",
+        });
+
+        const svggraph = b.addSystemCommand(&.{"dot", "-Tsvg"});
+        const svggraph_out = svggraph.addPrefixedOutputFileArg("-o", "graph.svg");
+        svggraph.addFileArg(dotgraph.captureStdOut());
+        const update_dotgraph = b.addUpdateSourceFiles();
+        update_dotgraph.addCopyFileToSource(dotgraph.captureStdOut(), "graph.dot");
+        update_dotgraph.addCopyFileToSource(svggraph_out, "graph.svg");
+        b.step("dot", "generate dot graph").dependOn(&update_dotgraph.step);
+    }
 }
 
 pub const DepPackageOptions = struct {

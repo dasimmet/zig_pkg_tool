@@ -1,0 +1,40 @@
+digraph {
+"N0" [label="install"]
+"N0" -> "N1"
+"N0" -> "N2"
+"N0" -> "N3"
+"N0" -> "N4"
+"N1" [label="install menuconfig"]
+"N1" -> "N5"
+"N5" [label="zig build-exe menuconfig Debug native"]
+"N5" -> "N6"
+"N5" -> "N7"
+"N6" [label="run gbp (gbp.bin.z)"]
+"N6" -> "N8"
+"N8" [label="zig build-exe gbp Debug native"]
+"N7" [label="run dwp (dwp.bin.z)"]
+"N7" -> "N9"
+"N9" [label="zig build-exe dwp Debug native"]
+"N9" -> "N10"
+"N10" [label="options"]
+"N2" [label="install generated to deppkg/deppkg.tar.gz"]
+"N2" -> "N11"
+"N11" [label="run pkg-targz (depkg.tar.gz)"]
+"N11" -> "N12"
+"N12" [label="zig build-exe pkg-targz Debug native"]
+"N3" [label="install zigpkg"]
+"N3" -> "N13"
+"N13" [label="zig build-exe zigpkg Debug native"]
+"N4" [label="run test"]
+"N4" -> "N14"
+"N14" [label="zig test Debug native"]
+"N15" [label="dot"]
+"N15" -> "N16"
+"N16" [label="UpdateSourceFiles"]
+"N16" -> "N17"
+"N16" -> "N18"
+"N17" [label="run zigpkg"]
+"N17" -> "N13"
+"N18" [label="run dot (graph.svg)"]
+"N18" -> "N17"
+}
