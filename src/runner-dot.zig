@@ -13,7 +13,11 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
     _ = ctx;
     const stdout = std.io.getStdOut().writer();
     try stdout.writeAll("digraph {\n");
-    var dotfile: DotFileWriter = .{};
+    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+
+    var dotfile: DotFileWriter = .init(gpa_alloc.allocator());
+    defer dotfile.deinit();
+
     if (targets.len == 0) {
         try dotfile.writeSteps(b, &b.default_step.*, stdout);
     } else {
@@ -27,14 +31,29 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
 }
 
 pub const DotFileWriter = struct {
-    id: u32 = 0,
-    depth: u32 = 0,
+    id: u32,
+    depth: u32,
+    gpa: std.mem.Allocator,
     steps: std.AutoHashMapUnmanaged(usize, struct {
         id: u32 = 0,
         visited: bool = false,
-    }) = .empty,
+    }),
+
+    pub fn init(gpa: std.mem.Allocator) @This() {
+        return .{
+            .id = 0,
+            .depth = 0,
+            .gpa = gpa,
+            .steps = .empty,
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.steps.deinit(self.gpa);
+    }
+
     pub fn writeSteps(self: *@This(), b: *std.Build, step: *std.Build.Step, writer: anytype) !void {
-        const step_entry = try self.steps.getOrPut(b.allocator, @intFromPtr(step));
+        const step_entry = try self.steps.getOrPut(self.gpa, @intFromPtr(step));
         if (step_entry.found_existing) {
             if (step_entry.value_ptr.visited) return;
             step_entry.value_ptr.visited = true;
@@ -46,7 +65,7 @@ pub const DotFileWriter = struct {
             self.id += 1;
         }
 
-        try self.printStep(b, step, step_entry.value_ptr.*.id, writer);
+        try self.printStep(step, step_entry.value_ptr.*.id, writer);
 
         self.depth += 1;
         for (step.dependencies.items) |dep_step| {
@@ -55,10 +74,10 @@ pub const DotFileWriter = struct {
         self.depth -= 1;
     }
 
-    pub fn printStep(self: *@This(), b: *std.Build, step: *std.Build.Step, i: u32, writer: anytype) !void {
+    fn printStep(self: *@This(), step: *std.Build.Step, i: u32, writer: anytype) !void {
         try writer.print("\"N{d}\" [label=\"{s}\"]\n", .{ i, step.name });
         for (step.dependencies.items) |dep_step| {
-            const dot_entry = try self.steps.getOrPut(b.allocator, @intFromPtr(dep_step));
+            const dot_entry = try self.steps.getOrPut(self.gpa, @intFromPtr(dep_step));
             if (!dot_entry.found_existing) {
                 dot_entry.value_ptr.* = .{
                     .id = self.id,
