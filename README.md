@@ -35,6 +35,11 @@ to convert the `Build.Step` graph to basic graphviz `dot` code.
 that can be easily be converted to the svg form.
 For now, generated dot strings are not escaped and might break.
 
+Since the build graph is dependent on the original invocation of `zig build`,
+integration into the build system is not easy. It's easier to build `zigpkg`
+manually, and invoke `zigpkg dot <build_root>` with the same arguments
+as `zig build`.
+
 ```bash
 # cli
 ./zig-out/bin/zigpkg dot . install | dot -Tsvg > graph.svg
