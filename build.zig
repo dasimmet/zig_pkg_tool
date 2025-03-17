@@ -84,7 +84,7 @@ pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath 
 }
 
 pub fn dotGraphStep(b: *std.Build, args: []const []const u8) *std.Build.Step.Run {
-    const zigpkg = b.dependency("zig_pkg_tool", .{}).artifact("zigpkg");
+    const zigpkg = b.dependencyFromBuildZig(@This(), .{}).artifact("zigpkg");
     return dotGraphStepInternal(b, zigpkg, args);
 }
 
@@ -96,7 +96,7 @@ fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []
         b.build_root.path.?,
     });
     zigRunEnv(b, dotgraph);
-    
+
     dotgraph.addArgs(args);
     return dotgraph;
 }
