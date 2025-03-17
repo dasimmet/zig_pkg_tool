@@ -48,6 +48,18 @@ pub fn build(b: *std.Build) void {
     const known_folders = b.dependency("known_folders", .{}).module("known-folders");
     zigpkg.root_module.addImport("known-folders", known_folders);
 
+    const graphviz = b.addTranslateC(.{
+        .root_source_file = b.path("src/graphviz.h"),
+        .target = target,
+        .optimize = opt,
+    });
+    const gv_mod = graphviz.createModule();
+    
+    gv_mod.linkSystemLibrary("gvc", .{
+        .preferred_link_mode = .static,
+    });
+    zigpkg.root_module.addImport("graphviz", gv_mod);
+
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigRunEnv(b, zigpkg_run);
 
@@ -96,7 +108,7 @@ fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []
         b.build_root.path.?,
     });
     zigRunEnv(b, dotgraph);
-    
+
     dotgraph.addArgs(args);
     return dotgraph;
 }

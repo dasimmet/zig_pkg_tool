@@ -3,6 +3,7 @@ const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
 const Manifest = @import("Manifest.zig");
+pub const graphviz = @import("graphviz");
 const EmbedRunnerSources = struct {
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
@@ -34,6 +35,24 @@ const usage =
 ;
 
 pub fn main() !void {
+    const gvc: *graphviz.GVC_t = graphviz.gvContext() orelse @panic("graphviz init");
+    defer _ = graphviz.gvFreeContext(gvc);
+    const gv_argv: []const [:0]const u8 = &.{
+        "--help",
+    };
+    _ = gv_argv;
+    // _ = graphviz.gvParseArgs(gvc, gv_argv.len, @constCast(@ptrCast(gv_argv.ptr)));
+    // const graph: *graphviz.graph_t = graphviz.gvNextInputGraph(gvc);
+    // graphviz.gvLayoutJobs(gvc, graph);
+    // graphviz.gvRenderJobs(gvc, graph);
+
+    //   graph_t *g, *prev = NULL;
+    //    g = gvNextInputGraph(gvc))) {
+    //     if (prev) {
+    //     gvFreeLayout(gvc, prev);
+    //     agclose(prev);
+
+
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
