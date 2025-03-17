@@ -43,8 +43,10 @@ For now, generated dot strings are not escaped and might break.
 ![Build Graph](graph.svg)
 
 ```zig
-// build.zig
-// svgGraph is a system "dot" command
+// build.zig usage
+// - the disadvantage here is, `dotGraphStep` basically reruns `zig build`,
+//   and passes the extra arguments down, but does not know about the original arguments.
+// - svgGraph is a system "dot" command
 const zig_pkg_tool = @import("pkg_tool");
 const svggraph = zig_pkg_tool.svgGraph(b, zig_pkg_tool.dotGraphStep(b, &.{
     "install", // extra args zig build, e.g. targets
