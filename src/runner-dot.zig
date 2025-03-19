@@ -12,7 +12,7 @@ pub fn main() !void {
 pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) !void {
     _ = ctx;
     const stdout = std.io.getStdOut().writer();
-    try stdout.writeAll("digraph {\n");
+    try stdout.writeAll(DotFileWriter.header);
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa_alloc.deinit();
 
@@ -21,27 +21,27 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
 
     if (targets.len == 0) {
         try dotfile.writeSteps(b, &b.default_step.*, stdout);
-        try dotfile.writeClusters(b, &b.default_step.*, stdout);
     } else {
         for (targets) |target| {
             if (b.top_level_steps.get(target)) |step| {
                 try dotfile.writeSteps(b, &step.step, stdout);
             }
         }
-        for (targets) |target| {
-            if (b.top_level_steps.get(target)) |step| {
-                try dotfile.writeClusters(b, &step.step, stdout);
-            }
-        }
     }
-    try stdout.writeAll("}\n");
+    try dotfile.writeClusters(b, stdout);
+    try stdout.writeAll(DotFileWriter.footer);
 }
 
 pub const DotFileWriter = struct {
-    depth: u32,
+    pub const header = "digraph {\n";
+    pub const node = "\"N{d}\" [label=\"{s}\", style=\"filled\", fillcolor=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n";
+    pub const cluster_header = "subgraph cluster_{d} {{\n  cluster = true\n  label = \"{s}\"\n";
+    pub const cluster = "\"N{d}\" -> \"N{d}\"\n";
+    pub const footer = "}\n";
     gpa: std.mem.Allocator,
     step_id: u32,
-    steps: std.AutoHashMapUnmanaged(usize, struct {
+    depth: u32,
+    steps: std.AutoArrayHashMapUnmanaged(usize, struct {
         id: u32 = 0,
         visited: bool = false,
         pkg_id: u32 = 0,
@@ -105,7 +105,7 @@ pub const DotFileWriter = struct {
             const label = try depBuildRootEscaped(b, step.owner, self.gpa);
             const color = stepColor(step);
             defer self.gpa.free(label);
-            try writer.print("\"N{d}\" [label=\"{s}\", style=\"bold\", color=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n", .{
+            try writer.print(node, .{
                 i,
                 step.name,
                 color,
@@ -122,37 +122,30 @@ pub const DotFileWriter = struct {
                 };
                 self.step_id += 1;
             }
-            try writer.print("\"N{d}\" -> \"N{d}\"\n", .{
+            try writer.print(cluster, .{
                 i,
                 dot_entry.value_ptr.id,
             });
         }
     }
 
-    pub fn writeClusters(self: *@This(), b: *std.Build, step: *std.Build.Step, writer: anytype) !void {
-        const step_entry = try self.steps.getOrPut(self.gpa, @intFromPtr(step));
-        std.debug.assert(step_entry.found_existing);
+    pub fn writeClusters(self: *@This(), b: *std.Build, writer: anytype) !void {
         var iter = self.pkgs.iterator();
         while (iter.next()) |val| {
             const build: *std.Build = @ptrFromInt(val.key_ptr.*);
             {
                 const label = try depBuildRootEscaped(b, build, self.gpa);
                 defer self.gpa.free(label);
-                try writer.print("subgraph cluster_{d} {{\n  cluster = true\n  label = \"{s}\"\n", .{ val.value_ptr.*, label });
+                try writer.print(cluster_header, .{ val.value_ptr.*, label });
             }
-            if (step_entry.value_ptr.pkg_id == val.value_ptr.*) try writer.print("  \"N{d}\"\n", .{step_entry.value_ptr.id});
-            for (step.dependencies.items) |dep_step| {
-                try writeClusterSteps(self, b, dep_step, val.value_ptr.*, writer);
+            var step_iter = self.steps.iterator();
+            while (step_iter.next()) |step_entry| {
+                const step: *std.Build.Step = @ptrFromInt(step_entry.key_ptr.*);
+                if (step.owner == build) {
+                    try writer.print("  \"N{d}\"\n", .{step_entry.value_ptr.id});
+                }
             }
             try writer.writeAll("}\n");
-        }
-    }
-    pub fn writeClusterSteps(self: *@This(), b: *std.Build, step: *std.Build.Step, pkg_id: u32, writer: anytype) !void {
-        const step_entry = try self.steps.getOrPut(self.gpa, @intFromPtr(step));
-        std.debug.assert(step_entry.found_existing);
-        if (step_entry.value_ptr.pkg_id == pkg_id) try writer.print("  \"N{d}\"\n", .{step_entry.value_ptr.id});
-        for (step.dependencies.items) |dep_step| {
-            try writeClusterSteps(self, b, dep_step, pkg_id, writer);
         }
     }
 };
@@ -161,7 +154,7 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
     const cache_root = root_b.graph.global_cache_root.path.?;
     const raw_label = if (std.mem.startsWith(u8, dep_b.build_root.path.?, cache_root))
         dep_b.build_root.path.?[cache_root.len + std.fs.path.sep_str.len * 2 + 1 ..]
-    else if (std.mem.eql(u8, dep_b.build_root.path.?, root_b.build_root.path.?))
+    else if (dep_b == root_b)
         std.fs.path.basename(root_b.build_root.path.?)
     else if (std.mem.startsWith(u8, dep_b.build_root.path.?, root_b.build_root.path.?))
         dep_b.build_root.path.?[root_b.build_root.path.?.len..]
@@ -179,12 +172,13 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
 
 fn stepColor(step: *std.Build.Step) []const u8 {
     inline for (&.{
-        .{ std.Build.Step.InstallArtifact, "#006400" },
+        .{ std.Build.Step.Compile, "#6495ed" },
+        .{ std.Build.Step.InstallArtifact, "#309430" },
         .{ std.Build.Step.InstallDir, "#8b4513" },
-        .{ std.Build.Step.InstallFile, "#2f4f4f" },
+        .{ std.Build.Step.InstallFile, "#8f6f6f" },
         .{ std.Build.Step.Run, "#bdb76b" },
         .{ std.Build.Step.WriteFile, "#000080" },
-        .{ std.Build.Step.UpdateSourceFiles, "#ff00ff" },
+        .{ std.Build.Step.UpdateSourceFiles, "#ff44ff" },
         .{ std.Build.Step.CheckFile, "#b03060" },
         .{ std.Build.Step.CheckObject, "#ff4500" },
         .{ std.Build.Step.ConfigHeader, "#ff4500" },
@@ -194,11 +188,10 @@ fn stepColor(step: *std.Build.Step) []const u8 {
         .{ std.Build.Step.Options, "#00ffff" },
         .{ std.Build.Step.RemoveDir, "#0000ff" },
         .{ std.Build.Step.TranslateC, "#00fa9a" },
-        .{ std.Build.Step.Compile, "#6495ed" },
     }) |T| {
         if (step.cast(T[0]) != null) return T[1];
     }
-    return "#000000";
+    return "#ffffff";
 }
 
 pub fn printStructStdout(item: anytype) !void {

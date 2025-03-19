@@ -1,104 +1,90 @@
 digraph {
-"N0" [label="install", style="bold", color="#000000", group="G0", tooltip="zig_pkg_tool"]
+"N0" [label="install", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
 "N0" -> "N1"
 "N0" -> "N2"
 "N0" -> "N3"
 "N0" -> "N4"
-"N1" [label="install menuconfig", style="bold", color="#006400", group="G0", tooltip="zig_pkg_tool"]
+"N1" [label="install menuconfig", style="filled", fillcolor="#309430", group="G0", tooltip="zig_pkg_tool"]
 "N1" -> "N5"
-"N5" [label="zig build-exe menuconfig Debug native", style="bold", color="#6495ed", group="G0", tooltip="zig_pkg_tool"]
+"N5" [label="zig build-exe menuconfig Debug native", style="filled", fillcolor="#6495ed", group="G0", tooltip="zig_pkg_tool"]
 "N5" -> "N6"
 "N5" -> "N7"
-"N6" [label="run gbp (gbp.bin.z)", style="bold", color="#bdb76b", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
+"N6" [label="run gbp (gbp.bin.z)", style="filled", fillcolor="#bdb76b", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
 "N6" -> "N8"
-"N8" [label="zig build-exe gbp Debug native", style="bold", color="#6495ed", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
-"N7" [label="run dwp (dwp.bin.z)", style="bold", color="#bdb76b", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
+"N8" [label="zig build-exe gbp Debug native", style="filled", fillcolor="#6495ed", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
+"N7" [label="run dwp (dwp.bin.z)", style="filled", fillcolor="#bdb76b", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
 "N7" -> "N9"
-"N9" [label="zig build-exe dwp Debug native", style="bold", color="#6495ed", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
+"N9" [label="zig build-exe dwp Debug native", style="filled", fillcolor="#6495ed", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
 "N9" -> "N10"
-"N10" [label="options", style="bold", color="#00ffff", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
-"N2" [label="install generated to deppkg/deppkg.tar.gz", style="bold", color="#2f4f4f", group="G0", tooltip="zig_pkg_tool"]
+"N10" [label="options", style="filled", fillcolor="#00ffff", group="G1", tooltip="zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"]
+"N2" [label="install generated to deppkg/deppkg.tar.gz", style="filled", fillcolor="#8f6f6f", group="G0", tooltip="zig_pkg_tool"]
 "N2" -> "N11"
-"N11" [label="run pkg-targz (depkg.tar.gz)", style="bold", color="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
+"N11" [label="run pkg-targz (depkg.tar.gz)", style="filled", fillcolor="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
 "N11" -> "N12"
-"N12" [label="zig build-exe pkg-targz Debug native", style="bold", color="#6495ed", group="G0", tooltip="zig_pkg_tool"]
-"N3" [label="install zigpkg", style="bold", color="#006400", group="G0", tooltip="zig_pkg_tool"]
+"N12" [label="zig build-exe pkg-targz Debug native", style="filled", fillcolor="#6495ed", group="G0", tooltip="zig_pkg_tool"]
+"N3" [label="install zigpkg", style="filled", fillcolor="#309430", group="G0", tooltip="zig_pkg_tool"]
 "N3" -> "N13"
-"N13" [label="zig build-exe zigpkg Debug native", style="bold", color="#6495ed", group="G0", tooltip="zig_pkg_tool"]
-"N4" [label="run test", style="bold", color="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
+"N13" [label="zig build-exe zigpkg Debug native", style="filled", fillcolor="#6495ed", group="G0", tooltip="zig_pkg_tool"]
+"N4" [label="run test", style="filled", fillcolor="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
 "N4" -> "N14"
-"N14" [label="zig test Debug native", style="bold", color="#6495ed", group="G0", tooltip="zig_pkg_tool"]
-"N15" [label="dot", style="bold", color="#000000", group="G0", tooltip="zig_pkg_tool"]
+"N14" [label="zig test Debug native", style="filled", fillcolor="#6495ed", group="G0", tooltip="zig_pkg_tool"]
+"N15" [label="exe", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
 "N15" -> "N16"
-"N16" [label="UpdateSourceFiles", style="bold", color="#ff00ff", group="G0", tooltip="zig_pkg_tool"]
-"N16" -> "N17"
-"N16" -> "N18"
-"N17" [label="dot generation", style="bold", color="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
-"N17" -> "N13"
-"N18" [label="dot to svg", style="bold", color="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
-"N18" -> "N17"
-"N19" [label="test", style="bold", color="#000000", group="G0", tooltip="zig_pkg_tool"]
-"N19" -> "N4"
-"N20" [label="fmt", style="bold", color="#000000", group="G0", tooltip="zig_pkg_tool"]
+"N16" [label="install menuconfig", style="filled", fillcolor="#309430", group="G0", tooltip="zig_pkg_tool"]
+"N16" -> "N5"
+"N17" [label="deppkg", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
+"N17" -> "N2"
+"N18" [label="zigpkg", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
+"N18" -> "N19"
+"N19" [label="run zigpkg", style="filled", fillcolor="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
+"N19" -> "N13"
+"N20" [label="dot", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
 "N20" -> "N21"
-"N21" [label="zig fmt", style="bold", color="#ffff00", group="G0", tooltip="zig_pkg_tool"]
+"N21" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip="zig_pkg_tool"]
+"N21" -> "N22"
+"N21" -> "N23"
+"N22" [label="dot generation", style="filled", fillcolor="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
+"N22" -> "N13"
+"N23" [label="dot to svg", style="filled", fillcolor="#bdb76b", group="G0", tooltip="zig_pkg_tool"]
+"N23" -> "N22"
+"N24" [label="test", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
+"N24" -> "N4"
+"N25" [label="fmt", style="filled", fillcolor="#ffffff", group="G0", tooltip="zig_pkg_tool"]
+"N25" -> "N26"
+"N26" [label="zig fmt", style="filled", fillcolor="#ffff00", group="G0", tooltip="zig_pkg_tool"]
 subgraph cluster_0 {
   cluster = true
   label = "zig_pkg_tool"
   "N0"
   "N1"
-  "N5"
   "N2"
+  "N3"
+  "N4"
+  "N5"
   "N11"
   "N12"
-  "N3"
   "N13"
-  "N4"
   "N14"
+  "N15"
+  "N16"
+  "N17"
+  "N18"
+  "N19"
+  "N20"
+  "N21"
+  "N22"
+  "N23"
+  "N24"
+  "N25"
+  "N26"
 }
 subgraph cluster_1 {
   cluster = true
   label = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"
   "N6"
-  "N8"
   "N7"
+  "N8"
   "N9"
   "N10"
-}
-subgraph cluster_0 {
-  cluster = true
-  label = "zig_pkg_tool"
-  "N15"
-  "N16"
-  "N17"
-  "N13"
-  "N18"
-  "N17"
-  "N13"
-}
-subgraph cluster_1 {
-  cluster = true
-  label = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"
-}
-subgraph cluster_0 {
-  cluster = true
-  label = "zig_pkg_tool"
-  "N19"
-  "N4"
-  "N14"
-}
-subgraph cluster_1 {
-  cluster = true
-  label = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"
-}
-subgraph cluster_0 {
-  cluster = true
-  label = "zig_pkg_tool"
-  "N20"
-  "N21"
-}
-subgraph cluster_1 {
-  cluster = true
-  label = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM"
 }
 }

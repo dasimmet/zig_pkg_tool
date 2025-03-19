@@ -63,6 +63,9 @@ pub fn build(b: *std.Build) void {
     {
         const dotgraph = dotGraphStepInternal(b, zigpkg, &.{
             "install",
+            "exe",
+            "deppkg",
+            "zigpkg",
             "dot",
             "test",
             "fmt",
@@ -92,6 +95,7 @@ pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath 
         "dot",
         "-Kdot",
         "-Tsvg",
+        "-Goverlap=false",
         "-x",
         "-Ln100",
         "-LO",
