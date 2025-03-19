@@ -86,7 +86,7 @@ pub const DotFileWriter = struct {
             self.step_id += 1;
         }
 
-        try self.printStep(step, step_entry.value_ptr.*.id, writer);
+        try self.printStep(b, step, step_entry.value_ptr.*.id, writer);
 
         self.depth += 1;
         for (step.dependencies.items) |dep_step| {
@@ -95,20 +95,15 @@ pub const DotFileWriter = struct {
         self.depth -= 1;
     }
 
-    fn printStep(self: *@This(), step: *std.Build.Step, i: u32, writer: anytype) !void {
+    fn printStep(self: *@This(), b: *std.Build, step: *std.Build.Step, i: u32, writer: anytype) !void {
         const pkg_entry = try self.pkgs.getOrPut(self.gpa, @intFromPtr(step.owner));
         if (!pkg_entry.found_existing) {
             pkg_entry.value_ptr.* = self.pkg_id;
             self.pkg_id += 1;
         }
         {
-            const label = try std.mem.replaceOwned(
-                u8,
-                self.gpa,
-                step.owner.build_root.path.?,
-                "\\",
-                "\\\\",
-            );
+            
+            const label = try depBuildRootEscaped(b, step.owner, self.gpa);
             defer self.gpa.free(label);
             try writer.print("\"N{d}\" [label=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n", .{
                 i,
@@ -140,13 +135,7 @@ pub const DotFileWriter = struct {
         while (iter.next()) |val| {
             const build: *std.Build = @ptrFromInt(val.key_ptr.*);
             {
-                const label = try std.mem.replaceOwned(
-                    u8,
-                    self.gpa,
-                    build.build_root.path.?,
-                    "\\",
-                    "\\\\",
-                );
+                const label = try depBuildRootEscaped(b, build, self.gpa);
                 defer self.gpa.free(label);
                 try writer.print("subgraph cluster_{d} {{\n  cluster = true\n  label = \"{s}\"\n", .{ val.value_ptr.*, label });
             }
@@ -166,6 +155,28 @@ pub const DotFileWriter = struct {
         }
     }
 };
+
+fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: std.mem.Allocator) ![]u8 {
+    const cache_root = root_b.graph.global_cache_root.path.?;
+    const raw_label = if (std.mem.startsWith(u8, dep_b.build_root.path.?, cache_root))
+        dep_b.build_root.path.?[cache_root.len + std.fs.path.sep_str.len * 2 + 1 ..]
+    else if (std.mem.eql(u8, dep_b.build_root.path.?, root_b.build_root.path.?))
+        std.fs.path.basename(root_b.build_root.path.?)
+    else if (std.mem.startsWith(u8, dep_b.build_root.path.?, root_b.build_root.path.?))
+        dep_b.build_root.path.?[root_b.build_root.path.?.len..]
+    else
+        dep_b.build_root.path.?;
+    
+    
+
+    return std.mem.replaceOwned(
+        u8,
+        gpa,
+        raw_label,
+        "\\",
+        "\\\\",
+    );
+}
 
 pub fn printStructStdout(item: anytype) !void {
     const stdout = std.io.getStdOut().writer();
