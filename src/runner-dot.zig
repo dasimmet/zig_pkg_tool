@@ -102,12 +102,13 @@ pub const DotFileWriter = struct {
             self.pkg_id += 1;
         }
         {
-            
             const label = try depBuildRootEscaped(b, step.owner, self.gpa);
+            const color = stepColor(step);
             defer self.gpa.free(label);
-            try writer.print("\"N{d}\" [label=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n", .{
+            try writer.print("\"N{d}\" [label=\"{s}\", style=\"bold\", color=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n", .{
                 i,
                 step.name,
+                color,
                 pkg_entry.value_ptr.*,
                 label,
             });
@@ -166,8 +167,6 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
         dep_b.build_root.path.?[root_b.build_root.path.?.len..]
     else
         dep_b.build_root.path.?;
-    
-    
 
     return std.mem.replaceOwned(
         u8,
@@ -176,6 +175,30 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
         "\\",
         "\\\\",
     );
+}
+
+fn stepColor(step: *std.Build.Step) []const u8 {
+    inline for (&.{
+        .{ std.Build.Step.InstallArtifact, "#006400" },
+        .{ std.Build.Step.InstallDir, "#8b4513" },
+        .{ std.Build.Step.InstallFile, "#2f4f4f" },
+        .{ std.Build.Step.Run, "#bdb76b" },
+        .{ std.Build.Step.WriteFile, "#000080" },
+        .{ std.Build.Step.UpdateSourceFiles, "#ff00ff" },
+        .{ std.Build.Step.CheckFile, "#b03060" },
+        .{ std.Build.Step.CheckObject, "#ff4500" },
+        .{ std.Build.Step.ConfigHeader, "#ff4500" },
+        .{ std.Build.Step.Fail, "#ffa500" },
+        .{ std.Build.Step.Fmt, "#ffff00" },
+        .{ std.Build.Step.ObjCopy, "#7fff00" },
+        .{ std.Build.Step.Options, "#00ffff" },
+        .{ std.Build.Step.RemoveDir, "#0000ff" },
+        .{ std.Build.Step.TranslateC, "#00fa9a" },
+        .{ std.Build.Step.Compile, "#6495ed" },
+    }) |T| {
+        if (step.cast(T[0]) != null) return T[1];
+    }
+    return "#000000";
 }
 
 pub fn printStructStdout(item: anytype) !void {

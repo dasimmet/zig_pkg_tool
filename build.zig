@@ -65,6 +65,7 @@ pub fn build(b: *std.Build) void {
             "install",
             "dot",
             "test",
+            "fmt",
         }).captureStdOut();
         const svggraph = svgGraph(b, dotgraph);
 
@@ -73,10 +74,29 @@ pub fn build(b: *std.Build) void {
         update_dotgraph.addCopyFileToSource(svggraph, "graph.svg");
         b.step("dot", "generate dot graph").dependOn(&update_dotgraph.step);
     }
+
+    b.step("fmt", "format source code").dependOn(&b.addFmt(.{
+        .paths = &.{
+            "build.zig",
+            "build.zig.zon",
+            "src",
+            "example/build.zig",
+            "example/build.zig.zon",
+            "example/src",
+        },
+    }).step);
 }
 
 pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath {
-    const svggraph = b.addSystemCommand(&.{ "dot", "-Tsvg" });
+    const svggraph = b.addSystemCommand(&.{
+        "dot",
+        "-Kdot",
+        "-Tsvg",
+        "-x",
+        "-Ln100",
+        "-LO",
+        "-Lg",
+    });
     svggraph.setName("dot to svg");
     const svggraph_out = svggraph.addPrefixedOutputFileArg("-o", "graph.svg");
     svggraph.addFileArg(dotgraph);
