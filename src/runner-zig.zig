@@ -24,15 +24,6 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    return mainBuild(null);
-}
-
-pub const buildExecArgs = struct {
-    executeBuildFn: fn (*std.Build, []const []const u8, ?*anyopaque) anyerror!void,
-    ctx: ?*anyopaque = null,
-};
-
-pub fn mainBuild(execArgs: ?buildExecArgs) !void {
     // Here we use an ArenaAllocator backed by a page allocator because a build is a short-lived,
     // one shot program. We don't need to waste time freeing memory and finding places to squish
     // bytes into. So we free everything all at once at the very end.
@@ -374,10 +365,6 @@ pub fn mainBuild(execArgs: ?buildExecArgs) !void {
     }
 
     validateSystemLibraryOptions(builder);
-
-    if (execArgs) |exec| {
-        return exec.executeBuildFn(builder, targets.items, exec.ctx);
-    }
 
     const stdout_writer = io.getStdOut().writer();
 
