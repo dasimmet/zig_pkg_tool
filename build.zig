@@ -1,5 +1,6 @@
 const std = @import("std");
 // const zon = @import("build.zig.zon");
+const Serialize = @import("src/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -88,6 +89,13 @@ pub fn build(b: *std.Build) void {
             "example/src",
         },
     }).step);
+
+    const bs = Serialize.serializeBuild(b, .{
+        .whitespace = true,
+    });
+    const update_bs = b.addUpdateSourceFiles();
+    update_bs.addBytesToSource(bs, "build.tree.zon");
+    b.step("update-build-tree", "update build.tree.zon").dependOn(&update_bs.step);
 }
 
 pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath {
