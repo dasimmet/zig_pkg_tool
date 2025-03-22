@@ -232,11 +232,12 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
     const serialized_b = try runZonStdoutCommand(opt, "runner-zon.zig", root, args[arg_sep..], Serialize);
     defer opt.gpa.free(serialized_b.source);
     defer std.zon.parse.free(opt.gpa, serialized_b.parsed);
-    // try std.zon.stringify.serialize(serialized_b.parsed, .{
-    //     .whitespace = true,
-    //     .emit_default_optional_fields = false,
-    // }, opt.stdout);
-    std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
+    try std.zon.stringify.serialize(serialized_b.parsed, .{
+        .whitespace = true,
+        .emit_default_optional_fields = false,
+    }, opt.stdout);
+    try opt.stdout.writeAll("\n");
+    // std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
 }
 
 
