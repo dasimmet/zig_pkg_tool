@@ -1,0 +1,180 @@
+.{
+    .name = "zig_pkg_tool",
+    .location = .root,
+    .dependencies = .{ .{
+        .name = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
+        .location = .cache,
+        .dependencies = .{ .{
+            .name = "zigimg-0.1.0-lly-O-NTEABwkjg9_WM4uLQr_TtL-7jp375PsZJyugGN",
+            .location = .cache,
+            .dependencies = .{},
+        }, .{
+            .name = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM",
+            .location = .cache,
+            .dependencies = .{},
+        } },
+    }, .{
+        .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+        .location = .cache,
+        .dependencies = .{},
+    } },
+    .steps = .{
+        .{
+            .id = .top_level,
+            .name = "install",
+            .dependencies = .{
+                1,
+                3,
+                6,
+                8,
+            },
+        },
+        .{
+            .id = .install_artifact,
+            .parent = 0,
+            .name = "install menuconfig",
+            .dependencies = .{2},
+        },
+        .{
+            .id = .compile,
+            .parent = 1,
+            .name = "zig build-exe menuconfig Debug native",
+        },
+        .{
+            .id = .install_file,
+            .parent = 0,
+            .name = "install generated to deppkg/deppkg.tar.gz",
+            .dependencies = .{4},
+        },
+        .{
+            .id = .run,
+            .parent = 3,
+            .name = "run pkg-targz (depkg.tar.gz)",
+            .dependencies = .{5},
+        },
+        .{
+            .id = .compile,
+            .parent = 4,
+            .name = "zig build-exe pkg-targz Debug native",
+        },
+        .{
+            .id = .install_artifact,
+            .parent = 0,
+            .name = "install zigpkg",
+            .dependencies = .{7},
+        },
+        .{
+            .id = .compile,
+            .parent = 6,
+            .name = "zig build-exe zigpkg Debug native",
+        },
+        .{
+            .id = .run,
+            .parent = 0,
+            .name = "run test",
+            .dependencies = .{9},
+        },
+        .{
+            .id = .compile,
+            .parent = 8,
+            .name = "zig test Debug native",
+        },
+        .{ .id = .top_level, .name = "uninstall" },
+        .{
+            .id = .top_level,
+            .name = "update-build-boring-tree",
+            .dependencies = .{12},
+        },
+        .{
+            .id = .update_source_files,
+            .parent = 11,
+            .name = "UpdateSourceFiles",
+        },
+        .{
+            .id = .top_level,
+            .name = "exe",
+            .dependencies = .{14},
+        },
+        .{
+            .id = .install_artifact,
+            .parent = 13,
+            .name = "install menuconfig",
+            .dependencies = .{2},
+        },
+        .{
+            .id = .top_level,
+            .name = "menuconfig",
+            .dependencies = .{16},
+        },
+        .{
+            .id = .run,
+            .parent = 15,
+            .name = "run menuconfig",
+            .dependencies = .{2},
+        },
+        .{
+            .id = .top_level,
+            .name = "deppkg",
+            .dependencies = .{3},
+        },
+        .{
+            .id = .top_level,
+            .name = "zigpkg",
+            .dependencies = .{19},
+        },
+        .{
+            .id = .run,
+            .parent = 18,
+            .name = "run zigpkg",
+            .dependencies = .{7},
+        },
+        .{
+            .id = .top_level,
+            .name = "test",
+            .dependencies = .{8},
+        },
+        .{
+            .id = .top_level,
+            .name = "dot",
+            .dependencies = .{22},
+        },
+        .{
+            .id = .update_source_files,
+            .parent = 21,
+            .name = "UpdateSourceFiles",
+            .dependencies = .{ 23, 24 },
+        },
+        .{
+            .id = .run,
+            .parent = 22,
+            .name = "dot generation",
+            .dependencies = .{7},
+        },
+        .{
+            .id = .run,
+            .parent = 22,
+            .name = "dot to svg",
+            .dependencies = .{23},
+        },
+        .{
+            .id = .top_level,
+            .name = "fmt",
+            .dependencies = .{26},
+        },
+        .{
+            .id = .fmt,
+            .parent = 25,
+            .name = "zig fmt",
+        },
+        .{
+            .id = .top_level,
+            .name = "update-build-tree",
+            .dependencies = .{28},
+        },
+        .{
+            .id = .update_source_files,
+            .parent = 27,
+            .name = "UpdateSourceFiles",
+        },
+    },
+}

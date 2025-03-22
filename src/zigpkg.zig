@@ -3,13 +3,16 @@ const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const TempFile = @import("TempFile.zig");
 const Manifest = @import("Manifest.zig");
+const Serialize = @import("BuildSerialize.zig");
 const EmbedRunnerSources = struct {
+    pub const @"BuildSerialize.zig" = @embedFile("BuildSerialize.zig");
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
     pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
     pub const @"runner-deppkg.zig" = @embedFile("runner-deppkg.zig");
     pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
+    pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
     pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
     pub const @"zonparse.zig" = @embedFile("zonparse.zig");
@@ -101,6 +104,7 @@ const commands = &.{
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
     .{ "checkout", cmd_checkout },
+    .{ "zon", cmd_zon },
 };
 
 const GlobalOptions = struct {
@@ -113,32 +117,6 @@ const GlobalOptions = struct {
     stdout: std.io.AnyWriter,
     stderr: std.io.AnyWriter,
 };
-
-// pub fn cmd_tree(opt: GlobalOptions, args: []const [:0]const u8) !void {
-//     const cmd_usage =
-//         \\usage: zigpkg tree {build root path}
-//         \\
-//     ;
-
-//     if (args.len > 1) {
-//         try opt.stdout.writeAll(cmd_usage);
-//         return std.process.exit(1);
-//     }
-
-//     const build_root: [:0]const u8 = if (args.len == 1) args[0] else "build.zig.zon";
-//     var mf = Manifest.ManifestFile{
-//         .path = build_root,
-//         .source = undefined,
-//         .manifest = undefined,
-//     };
-//     var mf_iter = mf.iterate(opt.gpa);
-//     defer mf_iter.deinit();
-//     while (try mf_iter.next()) |manifest| {
-//         std.log.info("manifest: \n{any}\n", .{
-//             manifest,
-//         });
-//     }
-// }
 
 pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =
@@ -233,6 +211,76 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
         }
     }
     return runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
+}
+
+pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
+    var arg_sep: usize = 0;
+    var root: []const u8 = ".";
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--")) {
+            arg_sep += 1;
+            break;
+        } else if (arg_sep == 0) {
+            arg_sep += 1;
+            root = arg;
+            break;
+        } else {
+            std.log.err("unknown argument: {s}", .{arg});
+            return error.UnknownArgument;
+        }
+    }
+    const serialized_b = try runZonStdoutCommand(opt, "runner-zon.zig", root, args[arg_sep..], Serialize);
+    defer opt.gpa.free(serialized_b.source);
+    defer std.zon.parse.free(opt.gpa, serialized_b.parsed);
+    // try std.zon.stringify.serialize(serialized_b.parsed, .{
+    //     .whitespace = true,
+    //     .emit_default_optional_fields = false,
+    // }, opt.stdout);
+    std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
+}
+
+
+pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !struct{
+    parsed: T,
+    source: [:0]u8,
+} {
+    var buildrunner: BuildRunner(EmbedRunnerSources) = try .init(opt.gpa, runner);
+    defer buildrunner.deinit(opt.gpa);
+
+    var argv = std.ArrayList([]const u8).init(opt.gpa);
+    defer argv.deinit();
+    try argv.appendSlice(&.{
+        opt.zig_exe, "build", "--build-runner", buildrunner.runner,
+    });
+    try argv.appendSlice(args);
+
+    const term = try std.process.Child.run(.{
+        .argv = argv.items, 
+        .allocator = opt.gpa,
+        .cwd = root,
+        .env_map = &opt.env_map,
+    });
+    defer opt.gpa.free(term.stdout);
+    defer opt.gpa.free(term.stderr);
+    try opt.stderr.writeAll(term.stderr);
+
+    switch (term.term) {
+        .Exited => |ex| {
+            if (ex != 0) {
+                try opt.stderr.print("subprocess exitcode: {d}\n", .{ex});
+                return error.ExitCode;
+            }
+        },
+        else => {
+            try opt.stderr.print("Term: {}\n", .{term.term});
+            return error.Term;
+        },
+    }
+    const my_src = try opt.gpa.dupeZ(u8, term.stdout);
+    return .{
+        .parsed = try std.zon.parse.fromSlice(T, opt.gpa, my_src, null, .{}),
+        .source = my_src,
+    };
 }
 
 pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {

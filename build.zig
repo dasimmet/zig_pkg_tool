@@ -3,6 +3,16 @@ const std = @import("std");
 const Serialize = @import("src/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
+    {
+        const update_bsb = b.addUpdateSourceFiles();
+        b.step("update-build-boring-tree", "update build.tree.zon").dependOn(&update_bsb.step);
+        const bs_boring = Serialize.serializeBuild(b, .{
+            .whitespace = true,
+            .emit_default_optional_fields = false,
+        });
+        update_bsb.addBytesToSource(bs_boring, "build.boring.tree.zon");
+    }
+
     const target = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});
     const exe = b.addExecutable(.{
@@ -90,12 +100,13 @@ pub fn build(b: *std.Build) void {
         },
     }).step);
 
+    const update_bs = b.addUpdateSourceFiles();
+    b.step("update-build-tree", "update build.tree.zon").dependOn(&update_bs.step);
     const bs = Serialize.serializeBuild(b, .{
         .whitespace = true,
+        .emit_default_optional_fields = false,
     });
-    const update_bs = b.addUpdateSourceFiles();
     update_bs.addBytesToSource(bs, "build.tree.zon");
-    b.step("update-build-tree", "update build.tree.zon").dependOn(&update_bs.step);
 }
 
 pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath {
