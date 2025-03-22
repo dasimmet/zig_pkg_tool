@@ -48,7 +48,7 @@ pub fn init(b: *std.Build) anyerror!@This() {
     return self;
 }
 
-pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, parent: ?u32) !void {
+pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, parent: ?Dependency.Index) !void {
     const gop_deps = try ctx.deps.getOrPut(root_b.allocator, b);
     if (!gop_deps.found_existing) gop_deps.value_ptr.* = .empty;
     const gop = try ctx.index.getOrPut(root_b.allocator, b);
@@ -72,8 +72,13 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
     }
     const gop2 = try ctx.index.getOrPut(root_b.allocator, b);
     const gop_deps2 = try ctx.deps.getOrPut(root_b.allocator, b);
-    for (b.available_deps, 0..) |dep, it| {
-        gop_deps2.value_ptr.items[it].name = dep[0];
+
+    var dep_it: usize = 0;
+    for (b.available_deps) |dep| {
+        if (b.lazyDependency(dep[0], .{})) |_| {
+            gop_deps2.value_ptr.items[dep_it].name = dep[0];
+            dep_it += 1;
+        }
     }
     gop2.value_ptr.dependencies = gop_deps2.value_ptr.items;
 }
