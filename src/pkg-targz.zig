@@ -129,7 +129,7 @@ pub fn fromBuild(
             try fs_paths.append(try gpa.dupe(u8, root));
             var zon_file = std.ArrayList(u8).init(gpa);
             try zon_file.appendSlice("raw:");
-            try std.zon.stringify.serializeArbitraryDepth(build, .{
+            try std.zon.stringify.serialize(build, .{
                 .whitespace = true,
                 .emit_default_optional_fields = false,
             }, zon_file.writer());
@@ -305,27 +305,4 @@ pub fn process(opt: Options) !void {
             };
         }
     }
-}
-
-pub fn zonfmt(value: anytype, options: std.zon.stringify.SerializeOptions) Formatter(@TypeOf(value)) {
-    return Formatter(@TypeOf(value)){ .value = value, .options = options };
-}
-
-/// Formats the given value using stringify.
-pub fn Formatter(comptime T: type) type {
-    return struct {
-        value: T,
-        options: std.zon.stringify.SerializeOptions,
-
-        pub fn format(
-            self: @This(),
-            comptime fmt_spec: []const u8,
-            options: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
-            _ = fmt_spec;
-            _ = options;
-            try std.zon.stringify.serializeArbitraryDepth(self.value, self.options, writer);
-        }
-    };
 }

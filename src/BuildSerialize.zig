@@ -42,11 +42,10 @@ pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) ![
     defer serialized.deinit(b);
 
     var output: std.ArrayListUnmanaged(u8) = .empty;
-    std.zon.stringify.serializeMaxDepth(
+    std.zon.stringify.serialize(
         serialized,
         opt,
         output.writer(b.allocator),
-        128,
     ) catch @panic("OOM");
     try output.writer(b.allocator).writeAll("\n");
     return output.toOwnedSlice(b.allocator);

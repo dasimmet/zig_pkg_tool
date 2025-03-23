@@ -193,11 +193,3 @@ fn stepColor(step: *std.Build.Step) []const u8 {
     }
     return "#ffffff";
 }
-
-pub fn printStructStdout(item: anytype) !void {
-    const stdout = std.io.getStdOut().writer();
-    try std.zon.stringify.serializeMaxDepth(item, .{
-        .whitespace = true,
-    }, stdout, 3);
-    try stdout.writeAll("\n");
-}
