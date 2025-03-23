@@ -6,7 +6,7 @@ pub const EmbedRunnerSources = struct {
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
     pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
 };
-pub const Embedded = BuildRunnerTmp((EmbedRunnerSources));
+pub const Embedded = BuildRunnerTmp(EmbedRunnerSources);
 
 pub fn BuildRunnerTmp(T: type) type {
     return struct {
