@@ -207,4 +207,5 @@
             .name = "UpdateSourceFiles",
         },
     },
+    .zig_version = "0.15.0-dev.78+9c9d3931d",
 }

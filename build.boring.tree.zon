@@ -18,4 +18,5 @@
         .{ .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL", .location = .cache },
     },
     .steps = .{ .{ .id = .top_level, .name = "install" }, .{ .id = .top_level, .name = "uninstall" } },
+    .zig_version = "0.15.0-dev.78+9c9d3931d",
 }

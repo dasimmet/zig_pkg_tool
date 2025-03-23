@@ -1,5 +1,6 @@
 const std = @import("std");
 const Build = std.Build;
+const builtin = @import("builtin");
 
 const Serialized = @This();
 
@@ -27,6 +28,7 @@ verbose: bool,
 release_mode: Build.ReleaseMode,
 dependencies: []const Dependency = &.{},
 steps: ?[]const Step = null,
+zig_version: []const u8,
 
 pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) []const u8 {
     var serialized: Serialized = Serialized.init(b) catch |err| {
@@ -56,6 +58,7 @@ pub fn init(b: *std.Build) anyerror!@This() {
         .verbose = b.verbose,
         .release_mode = b.release_mode,
         .dependencies = ctx.index.values(),
+        .zig_version = builtin.zig_version_string,
     };
     try self.addOptions(b);
     try self.addSteps(b);
@@ -218,8 +221,7 @@ pub const Location = enum {
             if (std.mem.containsAtLeast(u8, build_path[cache_root.len..], 3, std.fs.path.sep_str))
                 break :blk .cache_sub;
             break :blk .cache;
-        }
-        else if (std.mem.startsWith(u8, build_path, root_b.build_root.path.?))
+        } else if (std.mem.startsWith(u8, build_path, root_b.build_root.path.?))
             .root_sub
         else
             .unknown;

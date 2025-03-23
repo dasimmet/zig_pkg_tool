@@ -152,12 +152,18 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         Serialize,
     );
     defer serialized_b.deinit(opt.gpa);
-    const cache = if (opt.env_map.get("ZIG_GLOBAL_CACHE_DIR")) |dir| dir
-        else blk: {
-            const cp = try known_folders.getPath(opt.gpa, .cache)
-            orelse return error.CacheNotFound;
-            break :blk try std.fs.path.join(opt.gpa, &.{cp, "zig"});
-        };
+    const cache = if (opt.env_map.get(
+        "ZIG_GLOBAL_CACHE_DIR",
+    )) |dir| dir else blk: {
+        const cp = try known_folders.getPath(
+            opt.gpa,
+            .cache,
+        ) orelse return error.CacheNotFound;
+        break :blk try std.fs.path.join(
+            opt.gpa,
+            &.{ cp, "zig" },
+        );
+    };
 
     try pkg_targz.fromBuild(
         opt.gpa,
