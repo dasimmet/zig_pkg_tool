@@ -1,28 +1,32 @@
-.{ .dependencies = .{
-    .{
-        .name = "zig_pkg_tool",
-        .location = .root,
-        .dependencies = .{ .{ .name = "vaxis", .id = 1 }, .{ .name = "known_folders", .id = 4 } },
+.{
+    .options = .{ .available = .{}, .user_input = .{} },
+    .dependencies = .{
+        .{
+            .name = "zig_pkg_tool",
+            .location = .root,
+            .dependencies = .{ .{ .name = "vaxis", .id = 1 }, .{ .name = "known_folders", .id = 4 } },
+        },
+        .{
+            .name = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
+            .location = .cache,
+            .dependencies = .{ .{ .name = "zigimg", .id = 2 }, .{ .name = "zg", .id = 3 } },
+        },
+        .{ .name = "zigimg-0.1.0-lly-O-NTEABwkjg9_WM4uLQr_TtL-7jp375PsZJyugGN", .location = .cache },
+        .{ .name = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM", .location = .cache },
+        .{ .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL", .location = .cache },
     },
-    .{
-        .name = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
-        .location = .cache,
-        .dependencies = .{ .{ .name = "zigimg", .id = 2 }, .{ .name = "zg", .id = 3 } },
+    .steps = .{
+        .{ .id = .top_level, .name = "install" },
+        .{ .id = .top_level, .name = "uninstall" },
+        .{
+            .id = .top_level,
+            .name = "update-build-boring-tree",
+            .dependencies = .{3},
+        },
+        .{
+            .id = .update_source_files,
+            .parent = 2,
+            .name = "UpdateSourceFiles",
+        },
     },
-    .{ .name = "zigimg-0.1.0-lly-O-NTEABwkjg9_WM4uLQr_TtL-7jp375PsZJyugGN", .location = .cache },
-    .{ .name = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM", .location = .cache },
-    .{ .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL", .location = .cache },
-}, .steps = .{
-    .{ .id = .top_level, .name = "install" },
-    .{ .id = .top_level, .name = "uninstall" },
-    .{
-        .id = .top_level,
-        .name = "update-build-boring-tree",
-        .dependencies = .{3},
-    },
-    .{
-        .id = .update_source_files,
-        .parent = 2,
-        .name = "UpdateSourceFiles",
-    },
-} }
+}

@@ -5,6 +5,9 @@ a command line tool to work with `build.zig` dependencies and build graphs.
 It embeds custom build runners to retrieve build graph information,
 used to backup dependencies, output a graphviz `dot` file etc.
 
+The repo vendors zig master's `build-runner.zig` with an inserted hook
+to serialize the `std.Build` struct to `zon`.
+
 ## Usage
 
 ```

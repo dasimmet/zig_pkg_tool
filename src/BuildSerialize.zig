@@ -19,6 +19,10 @@ pub const Dependency = struct {
         deps: std.AutoArrayHashMapUnmanaged(*std.Build, std.ArrayListUnmanaged(Edge)),
     };
 };
+options: struct {
+    available: []const AvailableOption,
+    user_input: []const struct { []const u8, UserInputOption },
+},
 dependencies: []const Dependency = &.{},
 steps: ?[]const Step = null,
 
@@ -42,8 +46,13 @@ pub fn init(b: *std.Build) anyerror!@This() {
     };
     try recurse(b, &ctx, b, null);
     var self: @This() = .{
+        .options = .{
+            .available = &.{},
+            .user_input = &.{},
+        },
         .dependencies = ctx.index.values(),
     };
+    try self.addOptions(b);
     try self.addSteps(b);
     return self;
 }
@@ -83,6 +92,35 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
     gop2.value_ptr.dependencies = gop_deps2.value_ptr.items;
 }
 
+pub fn addOptions(self: *@This(), b: *std.Build) !void {
+    var opts = std.ArrayListUnmanaged(struct { []const u8, UserInputOption }).empty;
+    var opt_it = b.user_input_options.iterator();
+    while (opt_it.next()) |opt| {
+        try opts.append(b.allocator, .{ opt.key_ptr.*, .{
+            .name = opt.value_ptr.name,
+            .used = opt.value_ptr.used,
+            .value = switch (opt.value_ptr.value) {
+                .flag => .flag,
+                .scalar => |optv| .{ .scalar = optv },
+                .list => |optv| .{ .list = optv.items },
+                .lazy_path => |optv| .{ .lazy_path = optv.getPath(b) },
+                .lazy_path_list => |optv| blk: {
+                    var lp_list = std.ArrayListUnmanaged([]const u8).empty;
+                    for (optv.items) |lp| {
+                        try lp_list.append(b.allocator, lp.getPath(b));
+                    }
+                    break :blk .{ .lazy_path_list = try lp_list.toOwnedSlice(b.allocator) };
+                },
+                .map => .map_dummy_not_implemented,
+            },
+        } });
+    }
+    self.options.user_input = try opts.toOwnedSlice(b.allocator);
+    // TODO: im lazy casting this, because AvailableOption is private and vendored
+    // it'll be fine as long as the the std.Build version is identical
+    self.options.available = @ptrCast(b.available_options_list.items);
+}
+
 pub fn addSteps(self: *@This(), b: *std.Build) !void {
     var steps: Step.Context = if (self.steps) |_|
         return error.StepsNotNull
@@ -119,7 +157,7 @@ pub fn addDepSteps(b: *Build, step: Build.Step, steps: *Step.Context, parent: ?u
             dep_gop.value_ptr.* = .empty;
         }
         const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
-        if (!gop.found_existing) { 
+        if (!gop.found_existing) {
             gop.value_ptr.* = .{
                 .id = dep.id,
                 .parent = parent,
@@ -179,7 +217,7 @@ pub const Location = enum {
 
 const Step = struct {
     pub const Context = struct {
-        steps:  std.AutoArrayHashMapUnmanaged(usize, Step),
+        steps: std.AutoArrayHashMapUnmanaged(usize, Step),
         deps: std.AutoArrayHashMapUnmanaged(usize, std.ArrayListUnmanaged(u32)),
         pub const empty: Context = .{
             .steps = .empty,
@@ -190,4 +228,43 @@ const Step = struct {
     parent: ?u32 = null,
     name: []const u8,
     dependencies: []u32 = &.{},
+};
+
+// vendored and "non-recusive" from private std.Build
+pub const UserInputOption = struct {
+    name: []const u8,
+    value: UserValue,
+    used: bool,
+};
+
+pub const UserValue = union(enum) {
+    flag: void,
+    scalar: []const u8,
+    list: []const []const u8,
+    // TODO: fully support map with a non-recursive type
+    // map: []const struct { []const u8, *const UserValue },
+    map_dummy_not_implemented: void,
+    lazy_path: []const u8,
+    lazy_path_list: []const []const u8,
+};
+
+pub const AvailableOption = struct {
+    name: []const u8,
+    type_id: TypeId,
+    description: []const u8,
+    /// If the `type_id` is `enum` or `enum_list` this provides the list of enum options
+    enum_options: ?[]const []const u8,
+};
+
+pub const TypeId = enum {
+    bool,
+    int,
+    float,
+    @"enum",
+    enum_list,
+    string,
+    list,
+    build_id,
+    lazy_path,
+    lazy_path_list,
 };

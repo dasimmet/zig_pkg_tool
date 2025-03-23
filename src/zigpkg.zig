@@ -1,22 +1,9 @@
 const std = @import("std");
 const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
-const TempFile = @import("TempFile.zig");
 const Manifest = @import("Manifest.zig");
 const Serialize = @import("BuildSerialize.zig");
-const EmbedRunnerSources = struct {
-    pub const @"BuildSerialize.zig" = @embedFile("BuildSerialize.zig");
-    pub const @"Manifest.zig" = @embedFile("Manifest.zig");
-    pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
-    pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
-    pub const @"runner-deppkg.zig" = @embedFile("runner-deppkg.zig");
-    pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
-    pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
-    pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
-    pub const @"TempFile.zig" = @embedFile("TempFile.zig");
-    pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
-    pub const @"zonparse.zig" = @embedFile("zonparse.zig");
-};
+const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
 
 const usage =
     \\usage: zigpkg <subcommand> [--help]
@@ -35,6 +22,15 @@ const usage =
     \\  ZIG: path to the zig compiler to invoke in subprocesses. defaults to "zig".
     \\
 ;
+
+const commands = &.{
+    .{ "dot", cmd_dot },
+    .{ "create", cmd_create },
+    .{ "extract", cmd_extract },
+    .{ "build", cmd_build },
+    .{ "checkout", cmd_checkout },
+    .{ "zon", cmd_zon },
+};
 
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
@@ -98,15 +94,6 @@ pub fn helpArg(args: []const []const u8) bool {
     return false;
 }
 
-const commands = &.{
-    .{ "dot", cmd_dot },
-    .{ "create", cmd_create },
-    .{ "extract", cmd_extract },
-    .{ "build", cmd_build },
-    .{ "checkout", cmd_checkout },
-    .{ "zon", cmd_zon },
-};
-
 const GlobalOptions = struct {
     gpa: std.mem.Allocator,
     self_exe: []const u8,
@@ -136,41 +123,6 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
     });
-}
-
-pub fn BuildRunner(T: type) type {
-    return struct {
-        const Self = @This();
-        temp: TempFile.TmpDir,
-        runner: []const u8,
-
-        pub fn init(gpa: std.mem.Allocator, runner_file: []const u8) !Self {
-            var tempD = try TempFile.tmpDir(.{
-                .prefix = "zigpkg",
-            });
-
-            const runner = try std.fs.path.join(gpa, &.{
-                tempD.abs_path,
-                runner_file,
-            });
-
-            inline for (comptime std.meta.declarations(T)) |decl| {
-                try tempD.dir.writeFile(.{
-                    .data = @field(T, decl.name),
-                    .sub_path = decl.name,
-                });
-            }
-
-            return .{
-                .temp = tempD,
-                .runner = runner,
-            };
-        }
-        pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-            self.temp.deinit();
-            gpa.free(self.runner);
-        }
-    };
 }
 
 pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
@@ -229,9 +181,15 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
             return error.UnknownArgument;
         }
     }
-    const serialized_b = try runZonStdoutCommand(opt, "runner-zon.zig", root, args[arg_sep..], Serialize);
-    defer opt.gpa.free(serialized_b.source);
-    defer std.zon.parse.free(opt.gpa, serialized_b.parsed);
+    const serialized_b = try runZonStdoutCommand(
+        opt,
+        "runner-zon.zig",
+        root,
+        args[arg_sep..],
+        Serialize,
+    );
+    defer serialized_b.deinit(opt.gpa);
+
     try std.zon.stringify.serialize(serialized_b.parsed, .{
         .whitespace = true,
         .emit_default_optional_fields = false,
@@ -240,12 +198,15 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
     // std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
 }
 
-
-pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !struct{
+pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !struct {
     parsed: T,
     source: [:0]u8,
+    pub fn deinit(self: @This(), gpa: std.mem.Allocator) void {
+        gpa.free(self.source);
+        std.zon.parse.free(gpa, self.parsed);
+    }
 } {
-    var buildrunner: BuildRunner(EmbedRunnerSources) = try .init(opt.gpa, runner);
+    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
     var argv = std.ArrayList([]const u8).init(opt.gpa);
@@ -256,7 +217,7 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
     try argv.appendSlice(args);
 
     const term = try std.process.Child.run(.{
-        .argv = argv.items, 
+        .argv = argv.items,
         .allocator = opt.gpa,
         .cwd = root,
         .env_map = &opt.env_map,
@@ -285,7 +246,7 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
 }
 
 pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
-    var buildrunner: BuildRunner(EmbedRunnerSources) = try .init(opt.gpa, runner);
+    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
     var argv = std.ArrayList([]const u8).init(opt.gpa);
