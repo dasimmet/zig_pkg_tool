@@ -26,8 +26,8 @@ pub fn main() !void {
     var env_map = try std.process.getEnvMap(gpa);
     defer env_map.deinit();
 
-    const cache_dir = env_map.get("ZIG_GLOBAL_CACHE") orelse {
-        std.log.err("Need ZIG_GLOBAL_CACHE environment variable\n", .{});
+    const cache_dir = env_map.get("ZIG_GLOBAL_CACHE_DIR") orelse {
+        std.log.err("Need ZIG_GLOBAL_CACHE_DIR environment variable\n", .{});
         return error.MissingEnvironmentVariable;
     };
     const package_dir = try std.fs.path.join(gpa, &.{ cache_dir, "p" });

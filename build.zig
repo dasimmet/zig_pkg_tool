@@ -182,7 +182,7 @@ fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
     depPkg.setEnvironmentVariable("ZIG_BUILD_ROOT", b.build_root.path.?);
 
     const global_cache = b.graph.global_cache_root.path.?;
-    depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE", global_cache);
+    depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", global_cache);
 
     inline for (comptime std.meta.declarations(deps.packages)) |decl| {
         const hash = decl.name;
