@@ -75,10 +75,12 @@ pub fn process(opt: Options) !void {
 
         const gop = try temp.getOrPut(prefix);
         if (!gop.found_existing) {
+            const hash = try opt.gpa.dupe(u8, prefix[tar_prefix.len..]);
             gop.value_ptr.* = .{
-                .hash = try opt.gpa.dupe(u8, prefix[tar_prefix.len..]),
+                .hash = hash,
                 .tf = try TempFile.tmpFile(.{
                     .tmp_dir = &tempD,
+                    .prefix = hash,
                     .suffix = ".tar",
                 }),
                 .name_offset = sep_idx,
