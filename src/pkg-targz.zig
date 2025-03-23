@@ -100,6 +100,72 @@ pub fn main() !void {
     });
 }
 
+const Serialized = @import("BuildSerialize.zig");
+
+/// convert a std.Build zon to a tar.gz archive
+pub fn fromBuild(
+    gpa: std.mem.Allocator,
+    build: Serialized,
+    cache_root: []const u8,
+    root: []const u8,
+    out_path: []const u8,
+) !void {
+    var tar_paths = std.ArrayList([]const u8).init(gpa);
+    defer {
+        for (tar_paths.items) |it| gpa.free(it);
+        tar_paths.deinit();
+    }
+
+    var fs_paths = std.ArrayList([]const u8).init(gpa);
+    defer {
+        for (fs_paths.items) |it| gpa.free(it);
+        fs_paths.deinit();
+    }
+
+    for (build.dependencies, 0..) |dep, i| {
+        if (i == 0) {
+            std.debug.assert(dep.location == .root);
+            try tar_paths.append(try gpa.dupe(u8, "build/root"));
+            try fs_paths.append(try gpa.dupe(u8, root));
+        } else {
+            switch (dep.location) {
+                .root => {
+                    std.log.err("unexpected root dep: {any}", .{dep});
+                    return error.Unexpected;
+                },
+                .cache => {
+                    const fs_p = try std.fs.path.join(
+                        gpa,
+                        &.{ cache_root, "p", dep.name },
+                    );
+
+                    const tar_p = try std.fmt.allocPrint(
+                        gpa,
+                        "build/p/{s}",
+                        .{dep.name},
+                    );
+
+                    try tar_paths.append(tar_p);
+                    try fs_paths.append(fs_p);
+                },
+                .root_sub => {},
+                .cache_sub => {},
+                .unknown => {
+                    std.log.err("unknown dep: {any}", .{dep});
+                    return error.Unexpected;
+                },
+            }
+        }
+    }
+
+    return process(.{
+        .gpa = gpa,
+        .out_path = out_path,
+        .tar_paths = tar_paths.items,
+        .fs_paths = fs_paths.items,
+    });
+}
+
 const Options = struct {
     gpa: std.mem.Allocator,
     out_path: []const u8,

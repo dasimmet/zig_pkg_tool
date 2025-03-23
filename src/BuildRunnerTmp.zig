@@ -4,13 +4,10 @@ pub const EmbedRunnerSources = struct {
     pub const @"BuildSerialize.zig" = @embedFile("BuildSerialize.zig");
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"pkg-extractor.zig" = @embedFile("pkg-extractor.zig");
-    pub const @"pkg-targz.zig" = @embedFile("pkg-targz.zig");
-    pub const @"runner-deppkg.zig" = @embedFile("runner-deppkg.zig");
     pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
     pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
     pub const @"TempFile.zig" = @embedFile("TempFile.zig");
-    pub const @"zigpkg.zig" = @embedFile("zigpkg.zig");
     pub const @"zonparse.zig" = @embedFile("zonparse.zig");
 };
 pub const Embedded = BuildRunnerTmp((EmbedRunnerSources));

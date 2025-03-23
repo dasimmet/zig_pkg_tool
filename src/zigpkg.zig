@@ -1,6 +1,8 @@
 const std = @import("std");
 const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
+const pkg_targz = @import("pkg-targz.zig");
+const known_folders = @import("known-folders");
 const Manifest = @import("Manifest.zig");
 const Serialize = @import("BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
@@ -12,6 +14,7 @@ const usage =
     \\
     \\available subcommands:
     \\  dot      <build root path> [--] [zig build args]
+    \\  zon      {<build root path>|--} [zig build args]
     \\  create   <deppkg.tar.gz> {build root path}
     \\  extract  <deppkg.tar.gz> {build root output path}
     \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
@@ -127,23 +130,42 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
 
 pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =
-        \\usage: zigpkg create <deppkg.tar.gz> {build root path}
+        \\usage: zigpkg create <deppkg.tar.gz> <<build root path>|--> [z]
         \\
     ;
-    if (args.len < 1 or args.len > 2) {
+    if (args.len < 1) {
         try opt.stdout.writeAll(cmd_usage);
         return std.process.exit(1);
-    }
-    if (helpArg(args[0..args.len])) {
-        try opt.stdout.writeAll(cmd_usage);
-        return;
     }
 
     const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0] });
     defer opt.gpa.free(output);
 
-    const root = if (args.len == 2) args[1] else ".";
-    return runnerCommand(opt, "runner-deppkg.zig", root, &.{output});
+    const root = if (args.len > 1 and !std.mem.eql(u8, args[1], "--")) args[1] else ".";
+    const arg_sep: usize = if (args.len > 1 and std.mem.eql(u8, args[1], "--")) 2 else 1;
+
+    const serialized_b = try runZonStdoutCommand(
+        opt,
+        "runner-zon.zig",
+        root,
+        args[arg_sep..],
+        Serialize,
+    );
+    defer serialized_b.deinit(opt.gpa);
+    const cache = if (opt.env_map.get("ZIG_GLOBAL_CACHE_DIR")) |dir| dir
+        else blk: {
+            const cp = try known_folders.getPath(opt.gpa, .cache)
+            orelse return error.CacheNotFound;
+            break :blk try std.fs.path.join(opt.gpa, &.{cp, "zig"});
+        };
+
+    try pkg_targz.fromBuild(
+        opt.gpa,
+        serialized_b.parsed,
+        cache,
+        root,
+        output,
+    );
 }
 
 pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {

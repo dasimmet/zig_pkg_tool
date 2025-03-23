@@ -1,5 +1,7 @@
 .{
     .options = .{ .available = .{}, .user_input = .{} },
+    .verbose = false,
+    .release_mode = .off,
     .dependencies = .{
         .{
             .name = "zig_pkg_tool",
@@ -15,18 +17,5 @@
         .{ .name = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM", .location = .cache },
         .{ .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL", .location = .cache },
     },
-    .steps = .{
-        .{ .id = .top_level, .name = "install" },
-        .{ .id = .top_level, .name = "uninstall" },
-        .{
-            .id = .top_level,
-            .name = "update-build-boring-tree",
-            .dependencies = .{3},
-        },
-        .{
-            .id = .update_source_files,
-            .parent = 2,
-            .name = "UpdateSourceFiles",
-        },
-    },
+    .steps = .{ .{ .id = .top_level, .name = "install" }, .{ .id = .top_level, .name = "uninstall" } },
 }

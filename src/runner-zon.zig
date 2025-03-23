@@ -16,7 +16,7 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
     const stdout = std.io.getStdOut().writer();
 
     const bs = Serialize.serializeBuild(b, .{
-        .whitespace = true,
+        .whitespace = false,
         .emit_default_optional_fields = false,
     });
     try stdout.writeAll(bs);

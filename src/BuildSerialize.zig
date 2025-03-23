@@ -23,6 +23,8 @@ options: struct {
     available: []const AvailableOption,
     user_input: []const struct { []const u8, UserInputOption },
 },
+verbose: bool,
+release_mode: Build.ReleaseMode,
 dependencies: []const Dependency = &.{},
 steps: ?[]const Step = null,
 
@@ -45,11 +47,14 @@ pub fn init(b: *std.Build) anyerror!@This() {
         .index = .empty,
     };
     try recurse(b, &ctx, b, null);
+
     var self: @This() = .{
         .options = .{
             .available = &.{},
             .user_input = &.{},
         },
+        .verbose = b.verbose,
+        .release_mode = b.release_mode,
         .dependencies = ctx.index.values(),
     };
     try self.addOptions(b);
@@ -199,15 +204,21 @@ fn depBuildRoot(root_b: *const std.Build, dep_b: *const std.Build) []const u8 {
 
 pub const Location = enum {
     root,
+    // a subdirectory of root
     root_sub,
     cache,
+    // a subdirectory of a cached dep
+    cache_sub,
     unknown,
     pub fn fromRootBuildAndPath(root_b: *const std.Build, build_path: []const u8) @This() {
         const cache_root = root_b.graph.global_cache_root.path.?;
         return if (std.mem.eql(u8, build_path, root_b.build_root.path.?))
             .root
-        else if (std.mem.startsWith(u8, build_path, cache_root))
-            .cache
+        else if (std.mem.startsWith(u8, build_path, cache_root)) blk: {
+            if (std.mem.containsAtLeast(u8, build_path[cache_root.len..], 3, std.fs.path.sep_str))
+                break :blk .cache_sub;
+            break :blk .cache;
+        }
         else if (std.mem.startsWith(u8, build_path, root_b.build_root.path.?))
             .root_sub
         else

@@ -3,15 +3,12 @@ const std = @import("std");
 const Serialize = @import("src/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
-    {
-        const update_bsb = b.addUpdateSourceFiles();
-        b.step("update-build-boring-tree", "update build.tree.zon").dependOn(&update_bsb.step);
-        const bs_boring = Serialize.serializeBuild(b, .{
-            .whitespace = true,
-            .emit_default_optional_fields = false,
-        });
-        update_bsb.addBytesToSource(bs_boring, "build.boring.tree.zon");
-    }
+    const update_bsb = b.addUpdateSourceFiles();
+    const bs_boring = Serialize.serializeBuild(b, .{
+        .whitespace = true,
+        .emit_default_optional_fields = false,
+    });
+    update_bsb.addBytesToSource(bs_boring, "build.boring.tree.zon");
 
     const target = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});
@@ -101,7 +98,9 @@ pub fn build(b: *std.Build) void {
     }).step);
 
     const update_bs = b.addUpdateSourceFiles();
-    b.step("update-build-tree", "update build.tree.zon").dependOn(&update_bs.step);
+    const update_bs_step = b.step("update-build-tree", "update build.tree.zon");
+    update_bs_step.dependOn(&update_bs.step);
+    update_bs_step.dependOn(&update_bsb.step);
     const bs = Serialize.serializeBuild(b, .{
         .whitespace = true,
         .emit_default_optional_fields = false,
