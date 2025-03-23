@@ -152,6 +152,8 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         Serialize,
     );
     defer serialized_b.deinit(opt.gpa);
+
+    var cache_is_allocated = false;
     const cache = if (opt.env_map.get(
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
@@ -159,11 +161,14 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
             opt.gpa,
             .cache,
         ) orelse return error.CacheNotFound;
+        defer opt.gpa.free(cp);
+        cache_is_allocated = true;
         break :blk try std.fs.path.join(
             opt.gpa,
             &.{ cp, "zig" },
         );
     };
+    defer if (cache_is_allocated) opt.gpa.free(cache);
 
     try pkg_targz.fromBuild(
         opt.gpa,
