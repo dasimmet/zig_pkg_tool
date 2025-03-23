@@ -127,6 +127,14 @@ pub fn fromBuild(
             std.debug.assert(dep.location == .root);
             try tar_paths.append(try gpa.dupe(u8, "build/root"));
             try fs_paths.append(try gpa.dupe(u8, root));
+            var zon_file = std.ArrayList(u8).init(gpa);
+            try zon_file.appendSlice("raw:");
+            try std.zon.stringify.serializeArbitraryDepth(build, .{
+                .whitespace = true,
+                .emit_default_optional_fields = false,
+            }, zon_file.writer());
+            try tar_paths.append(try gpa.dupe(u8, "build/root.zon"));
+            try fs_paths.append(try zon_file.toOwnedSlice());
         } else {
             switch (dep.location) {
                 .root => {
