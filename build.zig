@@ -4,7 +4,7 @@ const Serialize = @import("src/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
     const update_bsb = b.addUpdateSourceFiles();
-    const bs_boring = Serialize.serializeBuild(b, .{
+    const bs_boring = Serialize.serializeBuildOrPanic(b, .{
         .whitespace = true,
         .emit_default_optional_fields = false,
     });
@@ -101,7 +101,7 @@ pub fn build(b: *std.Build) void {
     const update_bs_step = b.step("update-build-tree", "update build.tree.zon");
     update_bs_step.dependOn(&update_bs.step);
     update_bs_step.dependOn(&update_bsb.step);
-    const bs = Serialize.serializeBuild(b, .{
+    const bs = Serialize.serializeBuildOrPanic(b, .{
         .whitespace = true,
         .emit_default_optional_fields = false,
     });

@@ -30,17 +30,26 @@ dependencies: []const Dependency = &.{},
 steps: ?[]const Step = null,
 zig_version: []const u8,
 
-pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) []const u8 {
-    var serialized: Serialized = Serialized.init(b) catch |err| {
+pub fn serializeBuildOrPanic(b: *std.Build, opt: std.zon.stringify.SerializeOptions) []const u8 {
+    return serializeBuild(b, opt) catch |err| {
         std.log.err("serializeBuild: {s}", .{@errorName(err)});
         @panic("serializeBuild");
     };
+}
+
+pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) ![]const u8 {
+    var serialized: Serialized = try Serialized.init(b);
     defer serialized.deinit(b);
 
     var output: std.ArrayListUnmanaged(u8) = .empty;
-    std.zon.stringify.serializeMaxDepth(serialized, opt, output.writer(b.allocator), 128) catch @panic("OOM");
-    output.writer(b.allocator).writeAll("\n") catch @panic("OOM");
-    return output.toOwnedSlice(b.allocator) catch @panic("OOM");
+    std.zon.stringify.serializeMaxDepth(
+        serialized,
+        opt,
+        output.writer(b.allocator),
+        128,
+    ) catch @panic("OOM");
+    try output.writer(b.allocator).writeAll("\n");
+    return output.toOwnedSlice(b.allocator);
 }
 
 pub fn init(b: *std.Build) anyerror!@This() {
