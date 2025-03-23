@@ -27,7 +27,7 @@ pub fn fromSlice(
         zonStatus,
         .{
             .ignore_unknown_fields = true,
-            .enum_literals_as_string = true,
+            .enum_literals_as_strings = true,
         },
     );
 }
