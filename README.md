@@ -48,7 +48,7 @@ as `zig build`.
 ./zig-out/bin/zigpkg dot . install | dot -Tsvg > graph.svg
 ```
 
-![Build Graph](graph.svg)
+![Build Graph](graph.svg?sanitize=true)
 
 ```zig
 // build.zig usage
