@@ -18,7 +18,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = opt,
     });
-    b.installArtifact(exe);
     b.step("exe", "install menuconfig").dependOn(&b.addInstallArtifact(exe, .{}).step);
 
     const run = b.addRunArtifact(exe);
@@ -71,12 +70,13 @@ pub fn build(b: *std.Build) void {
     {
         const dotgraph = dotGraphStepInternal(b, zigpkg, &.{
             "install",
-            "exe",
             "deppkg",
-            "zigpkg",
             "dot",
-            "test",
+            "exe",
             "fmt",
+            "menuconfig",
+            "test",
+            "zigpkg",
         }).captureStdOut();
         const svggraph = svgGraph(b, dotgraph);
 
