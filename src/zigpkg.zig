@@ -29,6 +29,7 @@ const usage =
 const commands = &.{
     .{ "dot", cmd_dot },
     .{ "create", cmd_create },
+    .{ "_create_from_zon", cmd_create_from_zon },
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
     .{ "checkout", cmd_checkout },
@@ -173,6 +174,59 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     try pkg_targz.fromBuild(
         opt.gpa,
         serialized_b.parsed,
+        cache,
+        root,
+        output,
+    );
+}
+
+pub fn cmd_create_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
+    const root = args[0];
+
+    const zon_src = try std.fs.cwd().readFileAllocOptions(
+        opt.gpa,
+        args[1],
+        std.math.maxInt(u32),
+        1048576,
+        @alignOf(u8),
+        0,
+    );
+
+    const output = try std.fs.path.resolve(
+        opt.gpa,
+        &.{ opt.cwd, args[2] },
+    );
+    defer opt.gpa.free(output);
+
+    const parsed = try std.zon.parse.fromSlice(
+        Serialize,
+        opt.gpa,
+        zon_src,
+        null,
+        .{},
+    );
+    defer std.zon.parse.free(opt.gpa, parsed);
+
+    var cache_is_allocated = false;
+    const cache = if (opt.env_map.get(
+        "ZIG_GLOBAL_CACHE_DIR",
+    )) |dir| dir else blk: {
+        const cp = try known_folders.getPath(
+            opt.gpa,
+            .cache,
+        ) orelse return error.CacheNotFound;
+        defer opt.gpa.free(cp);
+        cache_is_allocated = true;
+        break :blk try std.fs.path.join(
+            opt.gpa,
+            &.{ cp, "zig" },
+        );
+    };
+    defer if (cache_is_allocated) opt.gpa.free(cache);
+
+    try pkg_targz.fromBuild(
+        opt.gpa,
+        parsed,
         cache,
         root,
         output,

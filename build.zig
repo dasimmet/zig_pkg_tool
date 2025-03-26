@@ -42,18 +42,8 @@ pub fn build(b: *std.Build) void {
     b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
 
-    const zigpkg = b.addExecutable(.{
-        .name = "zigpkg",
-        .root_source_file = b.path("src/zigpkg.zig"),
-        .target = target,
-        .optimize = opt,
-    });
-    if (target.result.os.tag == .windows) {
-        zigpkg.linkLibC();
-    }
+    const zigpkg = build_zigpkg(b, target, opt);
     b.installArtifact(zigpkg);
-    const known_folders = b.dependency("known_folders", .{}).module("known-folders");
-    zigpkg.root_module.addImport("known-folders", known_folders);
 
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigRunEnv(b, zigpkg_run);
@@ -156,6 +146,21 @@ fn zigRunEnv(b: *std.Build, run: *std.Build.Step.Run) void {
     }
 }
 
+pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.builtin.OptimizeMode) *std.Build.Step.Compile {
+    const zigpkg = b.addExecutable(.{
+        .name = "zigpkg",
+        .root_source_file = b.path("src/zigpkg.zig"),
+        .target = target,
+        .optimize = opt,
+    });
+    if (target.result.os.tag == .windows) {
+        zigpkg.linkLibC();
+    }
+    const known_folders = b.dependency("known_folders", .{}).module("known-folders");
+    zigpkg.root_module.addImport("known-folders", known_folders);
+    return zigpkg;
+}
+
 pub const DepPackageOptions = struct {
     name: []const u8,
 };
@@ -166,35 +171,19 @@ pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
 }
 
 fn depPackagesInternal(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
-    const build_runner = @import("root");
-    const deps = build_runner.dependencies;
-    const exe = b.addExecutable(.{
-        .name = "pkg-targz",
-        .root_source_file = b.path("src/pkg-targz.zig"),
-        .target = b.graph.host,
-        .optimize = .Debug,
-    });
+    const zon_source = Serialize.serializeBuild(b, .{
+        .whitespace = false,
+        .emit_default_optional_fields = false,
+    }) catch @panic("Build Serialize");
+    const wf = b.addWriteFiles();
+    const zon_file = wf.add("buildgraph.zon", zon_source);
+    const out_basename = b.fmt("{s}{s}", .{ opt.name, ".tar.gz" });
 
-    const depPkg = b.addRunArtifact(exe);
-    const basename = b.fmt("{s}{s}", .{ opt.name, ".tar.gz" });
-    const depPkgOut = depPkg.addOutputFileArg(basename);
-
-    depPkg.setEnvironmentVariable("ZIG_BUILD_ROOT", b.build_root.path.?);
-
-    const global_cache = b.graph.global_cache_root.path.?;
-    depPkg.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", global_cache);
-
-    inline for (comptime std.meta.declarations(deps.packages)) |decl| {
-        const hash = decl.name;
-        const dep = @field(deps.packages, hash);
-        if (@hasDecl(dep, "build_root")) {
-            if (std.mem.startsWith(u8, dep.build_root, global_cache)) {
-                const cache_dir = std.fs.path.basename(dep.build_root);
-                const arg = b.fmt("{s}:{s}", .{ cache_dir, cache_dir });
-                depPkg.addArg(arg);
-            }
-        }
-    }
-
-    return depPkgOut;
+    const zigpkg = build_zigpkg(b, b.graph.host, .ReleaseFast);
+    const run = b.addRunArtifact(zigpkg);
+    zigRunEnv(b, run);
+    run.addArg("_create_from_zon");
+    run.addArg(b.build_root.path.?);
+    run.addFileArg(zon_file);
+    return run.addOutputFileArg(out_basename);
 }
