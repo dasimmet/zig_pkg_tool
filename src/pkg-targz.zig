@@ -253,7 +253,7 @@ pub fn process(opt: Options) !void {
         defer iter.deinit();
         outer: while (iter.next() catch |err| {
             std.log.err("error accessing: {s}\n{}\n", .{
-                iter.name_buffer.items[0..:0],
+                iter.name_buffer.items,
                 err,
             });
             return err;
