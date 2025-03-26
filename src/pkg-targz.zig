@@ -251,7 +251,13 @@ pub fn process(opt: Options) !void {
 
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
-        outer: while (try iter.next()) |entry| {
+        outer: while (iter.next() catch |err| {
+            std.log.err("error accessing: {s}\n{}\n", .{
+                iter.name_buffer.items[0..:0],
+                err,
+            });
+            return err;
+        }) |entry| {
             include_entry: {
                 if (manifest) |mani| {
                     // if (mani.dependencies) |deps| {
