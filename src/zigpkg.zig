@@ -37,7 +37,7 @@ const GlobalOptions = struct {
 const CommandMap = []const Command;
 const Command = struct {
     []const u8,
-    *const fn(GlobalOptions, []const []const u8) anyerror!void,
+    *const fn (GlobalOptions, []const []const u8) anyerror!void,
 };
 
 const commands = &.{
