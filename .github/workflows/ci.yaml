@@ -25,5 +25,14 @@ jobs:
       - name: Set up Zig
         uses: mlugg/setup-zig@v1.2.1
 
+      - name: Fetch Dependencies
+        run: zig build --verbose --fetch
+
+      - name: Run `fmt`
+        run: zig build --verbose --summary all fmt && git status --porcelain
+
+      - name: Run `test`
+        run: zig build test
+
       - name: Run `build`
         run: zig build
