@@ -10,20 +10,87 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  deppkg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0
+
+      - name: setup zigpkg
+        uses: shrink/actions-docker-extract@v3
+        with:
+          image: "registry.gitlab.com/dasimmet/zig-container:latest"
+          path: /bin/zigpkg
+          destination: zig-out
+
+      - name: create deppkg
+        run: ./zig-out/zigpkg deppkg create zig-out/deppkg.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deppkg
+          path: zig-out/deppkg.tar.gz
+          overwrite: false
+          include-hidden-files: false
+
+  build_with_zig_master:
+    name: "Build with zig master"
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # - name: Set up LLVM and Clang
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y lld llvm llvm-dev clang
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: master
+
+      - name: Fetch Dependencies
+        run: zig build --verbose --fetch
+
+      - name: Run `fmt`
+        run: zig build --verbose --summary all fmt && git status --porcelain
+
+      - name: Run `test`
+        run: zig build test
+
+      - name: Run `build`
+        run: zig build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zig_build_output
+          path: zig-out
+          overwrite: false
+          include-hidden-files: false
+
+  build_with_zig_0_14_0:
+    name: "Build with zig 0.14.0"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Set up Zig
         uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: 0.14.0
+
+      - name: Fetch Dependencies
+        run: zig build --verbose --fetch
+
+      - name: Run `fmt`
+        run: zig build --verbose --summary all fmt && git status --porcelain
+
+      - name: Run `test`
+        run: zig build test
 
       - name: Run `build`
         run: zig build

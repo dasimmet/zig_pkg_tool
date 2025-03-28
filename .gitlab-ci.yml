@@ -1,0 +1,14 @@
+include:
+  - component: $CI_SERVER_FQDN/dasimmet/zig-container@1.0.0
+    inputs:
+      ZIG_IMAGE_VERSION: "latest"
+      ZIG_TARGET: "x86_64-linux-musl"
+      ZIG_OPTIMIZE: "ReleaseSmall"
+
+zig_build:
+  script:
+    - zig env
+    - zig build --verbose --fetch
+    - zig build --verbose --summary all -Dfmtcheck fmt
+    - zig build --verbose --summary all test
+    - zig build --verbose --summary all
