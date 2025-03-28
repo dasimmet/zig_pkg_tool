@@ -1,6 +1,6 @@
 const std = @import("std");
 const Manifest = @This();
-pub const zonparse = @import("zonparse.zig");
+pub const zonparse = @import("zonparse.zig").zonparse;
 const ZonDiag = zonparse.Status;
 pub const basename = "build.zig.zon";
 pub const Dependency = struct {
