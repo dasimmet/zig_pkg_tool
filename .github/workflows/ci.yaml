@@ -36,3 +36,10 @@ jobs:
 
       - name: Run `build`
         run: zig build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: zig-out
+          overwrite: false
+          include-hidden-files: false
