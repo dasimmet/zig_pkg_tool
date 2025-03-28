@@ -13,7 +13,7 @@ pub const Dependency = struct {
 
     name: []const u8,
     location: Location,
-    dependencies: []const Edge = &.{},
+    edges: ?Index = null,
 
     pub const Context = struct {
         index: std.AutoArrayHashMapUnmanaged(*std.Build, Dependency),
@@ -26,7 +26,8 @@ options: struct {
 },
 verbose: bool,
 release_mode: Build.ReleaseMode,
-dependencies: []const Dependency = &.{},
+dependencies: []Dependency = &.{},
+dependency_edges: []const ?Dependency.Edge = &.{},
 steps: ?[]const Step = null,
 zig_version: []const u8,
 
@@ -70,6 +71,25 @@ pub fn init(b: *std.Build) anyerror!@This() {
     };
     try self.addOptions(b);
     try self.addSteps(b);
+    var edges = std.ArrayListUnmanaged(?Dependency.Edge).empty;
+    outer: for (ctx.deps.values(), 0..) |edge, idx| {
+        for (self.dependencies) |*dep| {
+            if (dep.edges != null and dep.edges.? == idx) {
+                if (edge.items.len == 0) {
+                    dep.edges = null;
+                    continue :outer;
+                } else {
+                    dep.edges = @intCast(edges.items.len);
+                    break;
+                }
+            }
+        }
+        for (edge.items) |it| {
+            try edges.append(b.allocator, it);
+        }
+        try edges.append(b.allocator, null);
+    }
+    self.dependency_edges = edges.items;
     return self;
 }
 
@@ -81,7 +101,7 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
         gop.value_ptr.* = .{
             .name = depBuildRoot(root_b, b),
             .location = Location.fromRootBuildAndPath(root_b, b.build_root.path.?),
-            .dependencies = gop_deps.value_ptr.items,
+            .edges = @intCast(gop_deps.index),
         };
         for (b.available_deps) |dep| {
             if (b.lazyDependency(dep[0], .{})) |lazy_dep| {
@@ -105,7 +125,7 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
             dep_it += 1;
         }
     }
-    gop2.value_ptr.dependencies = gop_deps2.value_ptr.items;
+    gop2.value_ptr.edges = @intCast(gop_deps2.index);
 }
 
 pub fn addOptions(self: *@This(), b: *std.Build) !void {

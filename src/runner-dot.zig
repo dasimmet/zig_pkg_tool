@@ -171,25 +171,24 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
 }
 
 fn stepColor(step: *std.Build.Step) []const u8 {
-    inline for (&.{
-        .{ std.Build.Step.Compile, "#6495ed" },
-        .{ std.Build.Step.InstallArtifact, "#309430" },
-        .{ std.Build.Step.InstallDir, "#8b4513" },
-        .{ std.Build.Step.InstallFile, "#8f6f6f" },
-        .{ std.Build.Step.Run, "#bdb76b" },
-        .{ std.Build.Step.WriteFile, "#000080" },
-        .{ std.Build.Step.UpdateSourceFiles, "#ff44ff" },
-        .{ std.Build.Step.CheckFile, "#b03060" },
-        .{ std.Build.Step.CheckObject, "#ff4500" },
-        .{ std.Build.Step.ConfigHeader, "#ff4500" },
-        .{ std.Build.Step.Fail, "#ffa500" },
-        .{ std.Build.Step.Fmt, "#ffff00" },
-        .{ std.Build.Step.ObjCopy, "#7fff00" },
-        .{ std.Build.Step.Options, "#00ffff" },
-        .{ std.Build.Step.RemoveDir, "#0000ff" },
-        .{ std.Build.Step.TranslateC, "#00fa9a" },
-    }) |T| {
-        if (step.cast(T[0]) != null) return T[1];
-    }
-    return "#ffffff";
+    return switch (step.id) {
+        .compile => "#6495ed",
+        .install_artifact => "#309430",
+        .install_dir => "#8b4513",
+        .install_file => "#8f6f6f",
+        .run => "#bdb76b",
+        .write_file => "#3333aa",
+        .update_source_files => "#ff44ff",
+        .check_file => "#b03060",
+        .check_object => "#ff4500",
+        .config_header => "#ff4500",
+        .fail => "#ffa500",
+        .fmt => "#ffff00",
+        .objcopy => "#7fff00",
+        .options => "#00ffff",
+        .remove_dir => "#0000ff",
+        .translate_c => "#00fa9a",
+        .top_level => "#ffffff",
+        .custom => "#aaaaaa",
+    };
 }

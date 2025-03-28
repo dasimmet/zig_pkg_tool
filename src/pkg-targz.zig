@@ -186,7 +186,6 @@ pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
     const cwd = std.fs.cwd();
-    // std.log.info("writing deppkg tar.gz: {s}", .{opt.out_path});
     var output = try cwd.createFile(opt.out_path, .{});
     defer output.close();
 
@@ -260,18 +259,6 @@ pub fn process(opt: Options) !void {
         }) |entry| {
             include_entry: {
                 if (manifest) |mani| {
-                    // if (mani.dependencies) |deps| {
-                    //     var dep_iterator = deps.impl.iterator();
-                    //     while (dep_iterator.next()) |dep| {
-                    //         std.log.info("dep: {s} -> {s}:\n{}", .{
-                    //             mani.name,
-                    //             dep.key_ptr.*,
-                    //             zonfmt(dep.value_ptr.*, .{
-                    //                 .whitespace = true,
-                    //             }),
-                    //         });
-                    //     }
-                    // }
                     if (std.mem.eql(u8, entry.path, "build.zig.zon")) break :include_entry;
                     for (mani.paths) |p| {
                         if (std.mem.startsWith(u8, entry.path, p)) {

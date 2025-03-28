@@ -15,10 +15,7 @@ const usage =
     \\available subcommands:
     \\  dot      <build root path> [--] [zig build args]
     \\  zon      {<build root path>|--} [zig build args]
-    \\  create   <deppkg.tar.gz> {build root path}
-    \\  extract  <deppkg.tar.gz> {build root output path}
-    \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
-    \\  checkout <empty directory for git deps> {build root path} # WIP
+    \\  deppkg   <-h|--help|subcommand>
     \\
     \\environment variables:
     \\
@@ -26,14 +23,35 @@ const usage =
     \\
 ;
 
+const GlobalOptions = struct {
+    gpa: std.mem.Allocator,
+    self_exe: []const u8,
+    cwd: []const u8,
+    debug_level: u8 = 0,
+    zig_exe: []const u8,
+    env_map: std.process.EnvMap,
+    stdout: std.io.AnyWriter,
+    stderr: std.io.AnyWriter,
+};
+
+const CommandMap = []const Command;
+const Command = struct {
+    []const u8,
+    *const fn(GlobalOptions, []const []const u8) anyerror!void,
+};
+
 const commands = &.{
     .{ "dot", cmd_dot },
+    .{ "deppkg", cmd_deppkg },
+    .{ "zon", cmd_zon },
+};
+
+const deppkg_commands: CommandMap = &.{
     .{ "create", cmd_create },
-    .{ "_create_from_zon", cmd_create_from_zon },
+    .{ "from-zon", cmd_from_zon },
     .{ "extract", cmd_extract },
     .{ "build", cmd_build },
     .{ "checkout", cmd_checkout },
-    .{ "zon", cmd_zon },
 };
 
 pub fn main() !void {
@@ -88,6 +106,40 @@ pub fn main() !void {
     return std.process.exit(1);
 }
 
+pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
+    const cmd_usage =
+        \\usage: zigpkg deppkg <-h|--help|subcommand> [args]
+        \\
+        \\commands for packed build dependencies in .tar.gz files
+        \\
+        \\available subcommands:
+        \\  create   <deppkg.tar.gz> {build root path}
+        \\  from-zon <deppkg.tar.gz> {build root path}
+        \\  extract  <deppkg.tar.gz> {build root output path}
+        \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
+        \\  checkout <empty directory for git deps> {build root path} # WIP
+    ;
+    if (args.len < 1) {
+        try opt.stdout.writeAll(cmd_usage);
+        return std.process.exit(1);
+    }
+    if (helpArg(args[0..1])) {
+        try opt.stdout.writeAll(cmd_usage);
+        return std.process.exit(0);
+    }
+    inline for (deppkg_commands) |cmd| {
+        if (std.mem.eql(u8, args[0], cmd[0])) {
+            return cmd[1](opt, args[1..]);
+        }
+    }
+
+    try opt.stdout.writeAll(cmd_usage);
+    try opt.stdout.writeAll("unknown command: ");
+    try opt.stdout.writeAll(args[0]);
+    try opt.stdout.writeAll("\n");
+    return std.process.exit(1);
+}
+
 pub fn helpArg(args: []const []const u8) bool {
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--")) break;
@@ -97,17 +149,6 @@ pub fn helpArg(args: []const []const u8) bool {
     }
     return false;
 }
-
-const GlobalOptions = struct {
-    gpa: std.mem.Allocator,
-    self_exe: []const u8,
-    cwd: []const u8,
-    debug_level: u8 = 0,
-    zig_exe: []const u8,
-    env_map: std.process.EnvMap,
-    stdout: std.io.AnyWriter,
-    stderr: std.io.AnyWriter,
-};
 
 pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
     const cmd_usage =
@@ -180,7 +221,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
     );
 }
 
-pub fn cmd_create_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
     const root = args[0];
 
     const zon_src = try std.fs.cwd().readFileAllocOptions(

@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
     config_step.dependOn(&run.step);
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
-    const depPkgArc = depPackagesInternal(b, b,.{ .name = "depkg" });
+    const depPkgArc = depPackagesInternal(b, b, .{ .name = "depkg" });
     const depPkgInstall = b.addInstallFile(
         depPkgArc,
         "deppkg/deppkg.tar.gz",
@@ -163,6 +163,7 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
 
 pub const DepPackageOptions = struct {
     name: []const u8,
+    opt: std.builtin.OptimizeMode = .ReleaseFast,
 };
 
 pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
@@ -182,12 +183,15 @@ fn depPackagesInternal(b: *std.Build, this_b: *std.Build, opt: DepPackageOptions
     const zigpkg = build_zigpkg(
         this_b,
         this_b.graph.host,
-        .ReleaseFast,
+        opt.opt,
     );
     const run = b.addRunArtifact(zigpkg);
     zigRunEnv(b, run);
-    run.addArg("_create_from_zon");
-    run.addArg(b.build_root.path.?);
+    run.addArgs(&.{
+        "deppkg",
+        "from-zon",
+        b.build_root.path.?,
+    });
     run.addFileArg(zon_file);
     return run.addOutputFileArg(out_basename);
 }
