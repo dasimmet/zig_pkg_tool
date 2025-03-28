@@ -1,59 +1,14 @@
-variables:
-  ZIG_IMAGE_VERSION:
-    value: "latest"
-    description: Image of the zig container to use
-  ZIG_TARGET:
-    value: "x86_64-linux-musl"
-    description: Zig build target
-  ZIG_OPTIMIZE:
-    value: "ReleaseSmall"
-    description: Zig build optimize
-    options:
-      - Debug
-      - ReleaseSmall
-      - ReleaseFast
-      - ReleaseSafe
+include:
+  - component: $CI_SERVER_FQDN/dasimmet/zig-container@1.0.0
+    inputs:
+      ZIG_IMAGE_VERSION: "latest"
+      ZIG_TARGET: "x86_64-linux-musl"
+      ZIG_OPTIMIZE: "ReleaseSmall"
+
 zig_build:
-  variables:
-    ZIG_GLOBAL_CACHE_DIR: $CI_PROJECT_DIR/.zig-cache/global
-    ZIG_LOCAL_CACHE_DIR: $CI_PROJECT_DIR/.zig-cache/local
-  image:
-    name: registry.gitlab.com/dasimmet/zig-container:${ZIG_IMAGE_VERSION}
-    pull_policy: always
-  before_script:
-    - if $ZIG_SHOW_CACHE; then find .zig-cache -type f; fi
   script:
     - zig env
     - zig build --verbose --fetch
     - zig build --verbose --summary all -Dfmtcheck fmt
     - zig build --verbose --summary all test
     - zig build --verbose --summary all -Dtarget="$ZIG_TARGET" -Doptimize="$ZIG_OPTIMIZE"
-  coverage: '/TOTAL.*\s([.\d]+)%/'
-  artifacts:
-    paths:
-      - zig-out
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: zig-out/coverage/*/*/cobertura.xml
-  cache:
-    paths:
-      - .zig-cache
-    policy: pull-push
-    unprotect: false
-    untracked: false
-    when: on_success
-
-pages:
-  image: alpine:latest
-  needs:
-    - job: zig_build
-      artifacts: true
-  script:
-    - mv zig-out/docs public
-    - mv zig-out/coverage/ZBuild  public/coverage
-  rules:
-    - if: "$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH"
-  artifacts:
-    paths:
-      - public
