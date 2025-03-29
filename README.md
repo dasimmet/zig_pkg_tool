@@ -10,7 +10,7 @@ to serialize the `std.Build` struct to `zon` and send it from the subpocess stdo
 back to `zigpkg`.
 Then that information is used to perform operations based on the build graph.
 
-It is compatible and requires with zig 0.14.0 upwards at runtime, when zig master
+It is compatible and requires with `zig >= 0.14.0` at runtime, when zig master
 starts making changes to the build runner the vendored runner needs to be versioned
 inside this tool.
 
