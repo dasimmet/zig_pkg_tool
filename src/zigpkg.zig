@@ -13,9 +13,10 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  dot      <build root path> [--] [zig build args]
-    \\  zon      {<build root path>|--} [zig build args]
-    \\  deppkg   <-h|--help|subcommand>
+    \\  dot     rerun "zig build" and output a graphviz ".dot" file of all build steps
+    \\  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
+    \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
+    \\          dependencies required to build a zig package
     \\
     \\environment variables:
     \\
