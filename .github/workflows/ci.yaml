@@ -65,7 +65,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zig_build_output
+          name: zig_build_master
           path: zig-out
           overwrite: false
           include-hidden-files: false
@@ -94,3 +94,10 @@ jobs:
 
       - name: Run `build`
         run: zig build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zig_build_0.14.0
+          path: zig-out
+          overwrite: false
+          include-hidden-files: false
