@@ -344,12 +344,22 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
     });
     try argv.appendSlice(args);
 
-    const term = try std.process.Child.run(.{
+    const term = std.process.Child.run(.{
         .argv = argv.items,
         .allocator = opt.gpa,
         .cwd = root,
         .env_map = &opt.env_map,
-    });
+        .expand_arg0 = .expand,
+    }) catch |err| {
+        std.log.err("Subprocess error: {}\nArgv: {}", .{err, std.json.fmt(argv.items, .{.whitespace = .minified})});
+        switch (err) {
+            error.FileNotFound => {
+                std.log.err("Executable not found: {s}", .{argv.items[0]});
+            },
+            else => {},
+        }
+        return err;
+    };
     defer opt.gpa.free(term.stdout);
     defer opt.gpa.free(term.stderr);
     try opt.stderr.writeAll(term.stderr);
@@ -392,7 +402,16 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
     proc.env_map = &opt.env_map;
     proc.expand_arg0 = .expand;
 
-    const term = try proc.spawnAndWait();
+    const term = proc.spawnAndWait() catch |err| {
+        std.log.err("Subprocess error: {}\nArgv: {}", .{err, std.json.fmt(argv.items, .{.whitespace = .minified})});
+        switch (err) {
+            error.FileNotFound => {
+                std.log.err("Executable not found: {s}", .{argv.items[0]});
+            },
+            else => {},
+        }
+        return err;
+    };
     switch (term) {
         .Exited => |ex| {
             if (ex != 0) {
