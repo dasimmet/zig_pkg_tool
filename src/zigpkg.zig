@@ -22,6 +22,7 @@ const usage =
     \\
     \\  ZIG: path to the zig compiler to invoke in subprocesses. defaults to "zig".
     \\
+    \\
 ;
 
 const GlobalOptions = struct {
@@ -119,6 +120,8 @@ pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
         \\  extract  <deppkg.tar.gz> {build root output path}
         \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
         \\  checkout <empty directory for git deps> {build root path} # WIP
+        \\
+        \\
     ;
     if (args.len < 1) {
         try opt.stdout.writeAll(cmd_usage);
@@ -145,7 +148,7 @@ pub fn helpArg(args: []const []const u8) bool {
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--")) break;
         inline for (&.{ "--help", "-h", "-?" }) |helparg| {
-            if (std.mem.eql(u8, arg, helparg)) return true;
+            if (std.ascii.eqlIgnoreCase(arg, helparg)) return true;
         }
     }
     return false;
@@ -276,10 +279,20 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
 }
 
 pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
+    const cmd_usage =
+        \\usage: zigpkg dot {--help|build_root_path|--} [zig args]
+        \\
+        \\rerun "zig build" and output a graphviz ".dot" file of all build steps
+        \\
+        \\
+    ;
     var arg_sep: usize = 0;
     var root: []const u8 = ".";
     for (args) |arg| {
-        if (std.mem.eql(u8, arg, "--")) {
+        if (helpArg(&.{arg})) {
+            try opt.stdout.writeAll(cmd_usage);
+            return std.process.exit(0);
+        } else if (std.mem.eql(u8, arg, "--")) {
             arg_sep += 1;
             break;
         } else if (arg_sep == 0) {
@@ -319,12 +332,13 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
     );
     defer serialized_b.deinit(opt.gpa);
 
+    // std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
+
     try std.zon.stringify.serialize(serialized_b.parsed, .{
         .whitespace = true,
         .emit_default_optional_fields = false,
     }, opt.stdout);
     try opt.stdout.writeAll("\n");
-    // std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
 }
 
 pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !struct {
@@ -352,7 +366,7 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
         .env_map = &opt.env_map,
         .expand_arg0 = .expand,
     }) catch |err| {
-        std.log.err("Subprocess error: {}\nArgv: {}", .{err, std.json.fmt(argv.items, .{.whitespace = .minified})});
+        std.log.err("Subprocess error: {}\nArgv: {}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
         switch (err) {
             error.FileNotFound => {
                 std.log.err("Executable not found: {s}", .{argv.items[0]});
@@ -404,7 +418,7 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
     proc.expand_arg0 = .expand;
 
     const term = proc.spawnAndWait() catch |err| {
-        std.log.err("Subprocess error: {}\nArgv: {}", .{err, std.json.fmt(argv.items, .{.whitespace = .minified})});
+        std.log.err("Subprocess error: {}\nArgv: {}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
         switch (err) {
             error.FileNotFound => {
                 std.log.err("Executable not found: {s}", .{argv.items[0]});

@@ -56,6 +56,20 @@ based on it).
 This means the user is to provide build options that will fetch all dependencies
 he expects to be in the package.
 
+For now, this tool does not use the exact same filter logic as zig's filter on the `paths`
+field of `build.zig.zon`, so it cannot guarantee that the packaged dependencies
+produce the same hash. In that case the extract command will fail. That could be
+avoided by vendoring zig's Manifest parser or making it available in the standard
+library in the future.
+Not applying any filter would be an option too, but other tools
+like a misconfigured `zls` may write files into the zig package cache and add
+files we dont want too include in the package:
+
+```
+ls ~/.cache/zig/p/known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL/.zig-cache
+h  o  tmp  z
+```
+
 ## Graphviz dependency graph
 
 this executes `zig build` with a custom build runner (including potiential additional arguments),
@@ -65,7 +79,7 @@ For now, generated dot strings are not escaped and might break.
 
 Since the build graph is dependent on the original invocation of `zig build`,
 integration into the build system is not easy. It's easier to build `zigpkg`
-manually, and invoke `zigpkg dot <build_root>` with the same arguments
+manually, and invoke `zigpkg dot <build_root> [zig build ards]` with the same arguments
 as `zig build`.
 
 ```bash
