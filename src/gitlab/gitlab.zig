@@ -11,9 +11,9 @@ pub fn main() !void {
     const allocator = gpa_alloc.allocator();
 
     var repo_num: usize = 0;
-    try iterate(&repo_num, allocator, gitlab_url_base);
-    // try iterate(&repo_num, allocator, gitlab_url_zig);
-    // try iterate(&repo_num, allocator, gitlab_url_zig_package);
+    // try iterate(&repo_num, allocator, gitlab_url_base);
+    try iterate(&repo_num, allocator, gitlab_url_zig);
+    try iterate(&repo_num, allocator, gitlab_url_zig_package);
 }
 
 pub fn iterate(repo_num: *usize, allocator: std.mem.Allocator, gitlab_url: []const u8) !void {

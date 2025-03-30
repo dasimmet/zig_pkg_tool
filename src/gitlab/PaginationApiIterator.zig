@@ -6,8 +6,10 @@
 
 const std = @import("std");
 
-// ---- Fetches until pagination header ends
+// Fetches http responses until the "next" link pagination header is not available
 const PaginationApiIterator = @This();
+
+/// a Response from the Iterator's next() function
 pub const Response = struct {
     status: std.http.Status,
     body: []const u8,
@@ -24,6 +26,7 @@ next_url: ?[]const u8,
 url_owned: bool = false,
 method: std.http.Method = .GET,
 
+/// Initializes an http client and wraps it in the Iterator
 pub fn init(allocator: std.mem.Allocator, url: []const u8) PaginationApiIterator {
     return .{
         .client = std.http.Client{ .allocator = allocator },
@@ -40,6 +43,11 @@ pub fn deinit(self: *PaginationApiIterator) void {
     self.client.deinit();
 }
 
+/// fetches the next http response,
+/// parses the "next" link header if available
+/// stores in it in next_url
+/// returns the response. The caller is expected to deinitialize the response
+/// before calling next() again
 pub fn next(self: *PaginationApiIterator) !?Response {
     if (self.next_url == null) {
         self.deinit();
@@ -77,44 +85,54 @@ pub fn next(self: *PaginationApiIterator) !?Response {
     };
 }
 
-const example_header = "<https://example.com/last>; rel=\"last\", <https://example.com/prev>; rel=\"prev\", <https://example.com/next>; rel=\"next\"";
 pub const LinkHeader = struct {
     pub fn getLink(header: []const u8, rel: []const u8) ?[]const u8 {
-        if (std.mem.indexOf(u8, header, "rel=\"next\"") == null) {
+        if (std.ascii.indexOfIgnoreCase(header, "rel=\"") == null) {
             return null;
         }
         var urlStart: usize = 0;
         var urlEnd: usize = 0;
         while (true) {
             // find the url
-            urlStart = urlEnd + (std.mem.indexOfScalar(u8, header[urlEnd..], '<') orelse return null);
-            urlEnd = urlStart + (std.mem.indexOfScalar(u8, header[urlStart..], '>') orelse return null);
+            urlStart = urlEnd + (std.mem.indexOfScalar(
+                u8,
+                header[urlEnd..],
+                '<',
+            ) orelse return null);
+            urlEnd = urlStart + (std.mem.indexOfScalar(
+                u8,
+                header[urlStart..],
+                '>',
+            ) orelse return null);
             const next_url = header[urlStart + 1 .. urlEnd];
             // check where rel is relative to it
-            const relPos = std.ascii.indexOfIgnoreCase(header[urlEnd..], "rel=\"") orelse return null;
-            const relVal = std.ascii.startsWithIgnoreCase(header[urlEnd + relPos + "rel=\"".len ..], rel);
-            if (relVal and relPos <= 3) {
-                return next_url;
-            }
-            if (header.len - urlEnd <= 5) return null;
+            const relPos = std.ascii.indexOfIgnoreCase(
+                header[urlEnd..],
+                "rel=\"",
+            ) orelse return null;
+            if (relPos > 3) continue;
+            // check if its the one we look for
+            const relVal = std.ascii.startsWithIgnoreCase(
+                header[urlEnd + relPos + "rel=\"".len ..],
+                rel,
+            );
+            if (relVal) return next_url;
         }
     }
 };
 
+pub const example_header =
+    \\<http://last>; rel="last",
+    \\<http://prev>; rel="prev",
+    \\<http://next>; rel="next"
+;
+
 test "linkheader" {
-    try std.testing.expectEqualSlices(
-        u8,
-        "https://example.com/next",
-        LinkHeader.getLink(example_header, "next").?,
-    );
-    try std.testing.expectEqualSlices(
-        u8,
-        "https://example.com/last",
-        LinkHeader.getLink(example_header, "last").?,
-    );
-    try std.testing.expectEqualSlices(
-        u8,
-        "https://example.com/prev",
-        LinkHeader.getLink(example_header, "prev").?,
-    );
+    inline for (&.{ "next", "last", "prev" }) |rel| {
+        try std.testing.expectEqualSlices(
+            u8,
+            "http://" ++ rel,
+            LinkHeader.getLink(example_header, rel).?,
+        );
+    }
 }
