@@ -19,6 +19,7 @@ pub fn main() !void {
 pub fn iterate(repo_num: *usize, allocator: std.mem.Allocator, gitlab_url: []const u8) !void {
     const stdout = std.io.getStdOut().writer();
     var iter = PaginationApiIterator.init(allocator, gitlab_url);
+    defer iter.deinit();
     while (try iter.next()) |res| {
         defer res.deinit(allocator);
         if (res.status != .ok) {

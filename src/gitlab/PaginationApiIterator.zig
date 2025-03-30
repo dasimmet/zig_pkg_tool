@@ -22,8 +22,9 @@ pub const Response = struct {
 client: std.http.Client,
 // the next url to fetch. finish if null
 next_url: ?[]const u8,
-// is the url owned and should be freed after the next fetch?
-url_owned: bool = false,
+// this will be set to true after the first url passed in is consumed and 
+// replaced by an internally allocated one.
+next_url_owned: bool = false,
 method: std.http.Method = .GET,
 
 /// Initializes an http client and wraps it in the Iterator
@@ -35,7 +36,7 @@ pub fn init(allocator: std.mem.Allocator, url: []const u8) PaginationApiIterator
 }
 
 pub fn deinit(self: *PaginationApiIterator) void {
-    if (self.url_owned) {
+    if (self.next_url_owned) {
         if (self.next_url) |url| {
             self.client.allocator.free(url);
         }
@@ -49,10 +50,8 @@ pub fn deinit(self: *PaginationApiIterator) void {
 /// returns the response. The caller is expected to deinitialize the response
 /// before calling next() again
 pub fn next(self: *PaginationApiIterator) !?Response {
-    if (self.next_url == null) {
-        self.deinit();
-        return null;
-    }
+    if (self.next_url == null) return null;
+
     var serverHeaderBuffer = std.mem.zeroes([4096]u8);
     var charBuffer = std.ArrayList(u8).init(self.client.allocator);
     errdefer charBuffer.deinit();
@@ -66,14 +65,14 @@ pub fn next(self: *PaginationApiIterator) !?Response {
     };
     const res = self.client.fetch(fetchOptions) catch @panic("Internet issue.");
     var headers = std.http.HeaderIterator.init(&serverHeaderBuffer);
-    if (self.url_owned) {
+    if (self.next_url_owned) {
         self.client.allocator.free(self.next_url.?);
     }
     self.next_url = null;
     while (headers.next()) |h| {
         if (std.ascii.eqlIgnoreCase(h.name, "link")) {
             if (LinkHeader.getLink(h.value, "next")) |next_url| {
-                self.url_owned = true;
+                self.next_url_owned = true;
                 self.next_url = try self.client.allocator.dupe(u8, next_url);
                 break;
             }
