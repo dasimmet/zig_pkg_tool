@@ -4,6 +4,8 @@ pub const EmbedRunnerSources = struct {
     pub const @"BuildSerialize.zig" = @embedFile("BuildSerialize.zig");
     pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
+    pub const @"runner-zig-0.14.0.zig" = @embedFile("runner-zig-0.14.0.zig");
+    pub const @"runner-zig-master.zig" = @embedFile("runner-zig-master.zig");
     pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
 };
 pub const Embedded = BuildRunnerTmp(EmbedRunnerSources);
