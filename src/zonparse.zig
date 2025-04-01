@@ -14,7 +14,7 @@ const builtin = @import("builtin");
 // So in this file, switch out `zonparse` based on the zig compiler version
 // so it stays compatible with `master` as well as the release version
 
-pub const zonparse = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .eq)
-    @import("zonparse-0.14.0.zig")
+pub const zonparse = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
+    @import("zonparse-master.zig")
 else
-    @import("zonparse-master.zig");
+    @import("zonparse-0.14.0.zig");

@@ -3,6 +3,16 @@ const Build = std.Build;
 const builtin = @import("builtin");
 
 const Serialized = @This();
+options: struct {
+    available: []const AvailableOption,
+    user_input: []const struct { []const u8, UserInputOption },
+},
+verbose: bool,
+release_mode: Build.ReleaseMode,
+dependencies: []Dependency = &.{},
+dependency_edges: []const ?Dependency.Edge = &.{},
+steps: ?[]const Step = null,
+zig_version: []const u8,
 
 pub const Dependency = struct {
     pub const Index = u32;
@@ -20,16 +30,6 @@ pub const Dependency = struct {
         deps: std.AutoArrayHashMapUnmanaged(*std.Build, std.ArrayListUnmanaged(Edge)),
     };
 };
-options: struct {
-    available: []const AvailableOption,
-    user_input: []const struct { []const u8, UserInputOption },
-},
-verbose: bool,
-release_mode: Build.ReleaseMode,
-dependencies: []Dependency = &.{},
-dependency_edges: []const ?Dependency.Edge = &.{},
-steps: ?[]const Step = null,
-zig_version: []const u8,
 
 pub fn serializeBuildOrPanic(b: *std.Build, opt: std.zon.stringify.SerializeOptions) []const u8 {
     return serializeBuild(b, opt) catch |err| {
