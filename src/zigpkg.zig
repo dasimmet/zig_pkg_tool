@@ -391,7 +391,10 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
             return error.Term;
         },
     }
+
     const my_src = try opt.gpa.dupeZ(u8, term.stdout);
+    errdefer opt.gpa.free(my_src);
+
     return .{
         .parsed = try std.zon.parse.fromSlice(T, opt.gpa, my_src, null, .{}),
         .source = my_src,
