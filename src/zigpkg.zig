@@ -334,15 +334,32 @@ pub fn cmd_dot2(opt: GlobalOptions, args: []const []const u8) !void {
     );
     defer serialized_b.deinit(opt.gpa);
     try opt.stdout.writeAll(dot.DotFileWriter.header);
-    for (serialized_b.parsed.steps.?, 0..) |step, i| {
+    for (serialized_b.parsed.steps.?, 0..) |step, step_id| {
         // const label = dot.buildRootEscaped(opt.zig_exe, build_root: []const u8, dep_root: []const u8, gpa: std.mem.Allocator)
         try opt.stdout.print(dot.DotFileWriter.node, .{
-            i,
+            step_id,
             step.name,
             dot.stepColor(step.id),
-            step,
+            step.owner orelse 42,
             "",
         });
+        for (step.dependencies) |dep| {
+            try opt.stdout.print(dot.DotFileWriter.edge, .{ step_id, dep });
+        }
+    }
+    for (serialized_b.parsed.dependencies, 0..) |dep, dep_id| {
+        try opt.stdout.print(dot.DotFileWriter.cluster_header, .{
+            dep_id,
+            dep.name,
+        });
+        for (serialized_b.parsed.steps.?, 0..) |step, step_id| {
+            if (step.owner != null and step.owner.? == dep_id) {
+                try opt.stdout.print(dot.DotFileWriter.cluster_node, .{
+                    step_id,
+                });
+            }
+        }
+        try opt.stdout.writeAll(dot.DotFileWriter.cluster_footer);
     }
     try opt.stdout.writeAll(dot.DotFileWriter.footer);
 }

@@ -26,7 +26,8 @@ pub const Dependency = struct {
     edges: ?Index = null,
 
     pub const Context = struct {
-        index: std.AutoArrayHashMapUnmanaged(*std.Build, Dependency),
+        pub const Index = std.AutoArrayHashMapUnmanaged(*std.Build, Dependency);
+        index: Context.Index,
         deps: std.AutoArrayHashMapUnmanaged(*std.Build, std.ArrayListUnmanaged(Edge)),
     };
 };
@@ -70,7 +71,8 @@ pub fn init(b: *std.Build) anyerror!@This() {
         .zig_version = builtin.zig_version_string,
     };
     try self.addOptions(b);
-    try self.addSteps(b, &ctx);
+    try self.addSteps(b, &ctx.index);
+
     var edges = std.ArrayListUnmanaged(?Dependency.Edge).empty;
     outer: for (ctx.deps.values(), 0..) |edge, idx| {
         for (self.dependencies) |*dep| {
@@ -157,12 +159,15 @@ pub fn addOptions(self: *@This(), b: *std.Build) !void {
     self.options.available = @ptrCast(b.available_options_list.items);
 }
 
-pub fn addSteps(self: *@This(), b: *std.Build, dep_ctx: *Dependency.Context) !void {
+pub fn addSteps(self: *@This(), b: *std.Build, dep_index: *const Dependency.Context.Index) !void {
     var steps: Step.Context = if (self.steps) |_|
         return error.StepsNotNull
     else
-        .empty;
-    steps.deps = dep_ctx.index;
+        .{
+            .steps = .empty,
+            .deps = .empty,
+            .builds = dep_index,
+        };
     try addStepsRecurse(b, &steps);
     self.steps = steps.steps.values();
 }
@@ -172,14 +177,14 @@ pub fn addStepsRecurse(b: *std.Build, steps: *Step.Context) !void {
     while (tld_iter.next()) |tld| {
         const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(&tld.value_ptr.*.step));
         const dep_gop = try steps.deps.getOrPut(b.allocator, @intFromPtr(&tld.value_ptr.*.step));
-        const build_idx = try steps.builds.getOrPut(b.allocator, tld.value_ptr.step.owner);
+        const build_idx = steps.builds.getIndex(tld.value_ptr.*.step.owner);
         if (!dep_gop.found_existing) dep_gop.value_ptr.* = .empty;
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
                 .id = tld.value_ptr.*.step.id,
                 .name = tld.key_ptr.*,
                 .dependencies = dep_gop.value_ptr.items,
-                .owner = @intCast(build_idx.index),
+                .owner = if (build_idx) |bidx| @intCast(bidx) else null,
             };
             try addDepSteps(b, tld.value_ptr.*.step, steps, @intCast(gop.index));
             const dep_gop2 = try steps.deps.getOrPut(b.allocator, @intFromPtr(&tld.value_ptr.*.step));
@@ -188,20 +193,22 @@ pub fn addStepsRecurse(b: *std.Build, steps: *Step.Context) !void {
         }
     }
 }
-
+ 
 pub fn addDepSteps(b: *Build, step: Build.Step, steps: *Step.Context, parent: ?u32) !void {
     for (step.dependencies.items) |dep| {
         const dep_gop = try steps.deps.getOrPut(b.allocator, @intFromPtr(dep));
         if (!dep_gop.found_existing) {
             dep_gop.value_ptr.* = .empty;
         }
-        const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
+        const gop =try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
+        const build_idx = steps.builds.getIndex(dep.owner);
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
                 .id = dep.id,
                 .parent = parent,
                 .name = dep.name,
                 .dependencies = dep_gop.value_ptr.items,
+                .owner = if (build_idx) |bidx| @intCast(bidx) else null,
             };
             try addDepSteps(b, dep.*, steps, @intCast(gop.index));
         }
@@ -263,15 +270,10 @@ const Step = struct {
     pub const Context = struct {
         steps: std.AutoArrayHashMapUnmanaged(usize, Step),
         deps: std.AutoArrayHashMapUnmanaged(usize, std.ArrayListUnmanaged(u32)),
-        builds: std.AutoArrayHashMapUnmanaged(*std.Build, Dependency),
-        pub const empty: Context = .{
-            .steps = .empty,
-            .deps = .empty,
-            .builds = .empty,
-        };
+        builds: *const Dependency.Context.Index,
     };
     id: Build.Step.Id,
-    owner: u32,
+    owner: ?u32,
     parent: ?u32 = null,
     name: []const u8,
     dependencies: []u32 = &.{},

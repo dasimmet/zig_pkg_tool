@@ -35,8 +35,10 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
 pub const DotFileWriter = struct {
     pub const header = "digraph {\n";
     pub const node = "\"N{d}\" [label=\"{s}\", style=\"filled\", fillcolor=\"{s}\", group=\"G{d}\", tooltip=\"{s}\"]\n";
+    pub const edge = "\"N{d}\" -> \"N{d}\"\n";
     pub const cluster_header = "subgraph cluster_{d} {{\n  cluster = true\n  label = \"{s}\"\n";
-    pub const cluster = "\"N{d}\" -> \"N{d}\"\n";
+    pub const cluster_node = "  \"N{d}\"\n";
+    pub const cluster_footer = "}\n";
     pub const footer = "}\n";
     gpa: std.mem.Allocator,
     step_id: u32,
@@ -122,7 +124,7 @@ pub const DotFileWriter = struct {
                 };
                 self.step_id += 1;
             }
-            try writer.print(cluster, .{
+            try writer.print(edge, .{
                 i,
                 dot_entry.value_ptr.id,
             });
@@ -142,10 +144,10 @@ pub const DotFileWriter = struct {
             while (step_iter.next()) |step_entry| {
                 const step: *std.Build.Step = @ptrFromInt(step_entry.key_ptr.*);
                 if (step.owner == build) {
-                    try writer.print("  \"N{d}\"\n", .{step_entry.value_ptr.id});
+                    try writer.print(cluster_node, .{step_entry.value_ptr.id});
                 }
             }
-            try writer.writeAll("}\n");
+            try writer.writeAll(cluster_footer);
         }
     }
 };
