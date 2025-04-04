@@ -193,14 +193,14 @@ pub fn addStepsRecurse(b: *std.Build, steps: *Step.Context) !void {
         }
     }
 }
- 
+
 pub fn addDepSteps(b: *Build, step: Build.Step, steps: *Step.Context, parent: ?u32) !void {
     for (step.dependencies.items) |dep| {
         const dep_gop = try steps.deps.getOrPut(b.allocator, @intFromPtr(dep));
         if (!dep_gop.found_existing) {
             dep_gop.value_ptr.* = .empty;
         }
-        const gop =try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
+        const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
         const build_idx = steps.builds.getIndex(dep.owner);
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
