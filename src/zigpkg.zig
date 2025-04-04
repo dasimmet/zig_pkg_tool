@@ -6,6 +6,7 @@ const known_folders = @import("known-folders");
 const Manifest = @import("Manifest.zig");
 const Serialize = @import("BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
+const dot = @import("runner-dot.zig");
 
 const usage =
     \\usage: zigpkg <subcommand> [--help]
@@ -44,6 +45,7 @@ const Command = struct {
 
 const commands = &.{
     .{ "dot", cmd_dot },
+    .{ "dot2", cmd_dot2 },
     .{ "deppkg", cmd_deppkg },
     .{ "zon", cmd_zon },
 };
@@ -305,6 +307,44 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
         }
     }
     return runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
+}
+
+pub fn cmd_dot2(opt: GlobalOptions, args: []const []const u8) !void {
+    var arg_sep: usize = 0;
+    var root: []const u8 = ".";
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, "--")) {
+            arg_sep += 1;
+            break;
+        } else if (arg_sep == 0) {
+            arg_sep += 1;
+            root = arg;
+            break;
+        } else {
+            std.log.err("unknown argument: {s}", .{arg});
+            return error.UnknownArgument;
+        }
+    }
+    const serialized_b = try runZonStdoutCommand(
+        opt,
+        "runner-zon.zig",
+        root,
+        args[arg_sep..],
+        Serialize,
+    );
+    defer serialized_b.deinit(opt.gpa);
+    try opt.stdout.writeAll(dot.DotFileWriter.header);
+    for (serialized_b.parsed.steps.?, 0..) |step, i| {
+        // const label = dot.buildRootEscaped(opt.zig_exe, build_root: []const u8, dep_root: []const u8, gpa: std.mem.Allocator)
+        try opt.stdout.print(dot.DotFileWriter.node, .{
+            i,
+            step.name,
+            dot.stepColor(step.id),
+            step,
+            "",
+        });
+    }
+    try opt.stdout.writeAll(dot.DotFileWriter.footer);
 }
 
 pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {

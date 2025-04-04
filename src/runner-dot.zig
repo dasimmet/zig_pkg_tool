@@ -103,7 +103,7 @@ pub const DotFileWriter = struct {
         }
         {
             const label = try depBuildRootEscaped(b, step.owner, self.gpa);
-            const color = stepColor(step);
+            const color = stepColor(step.id);
             defer self.gpa.free(label);
             try writer.print(node, .{
                 i,
@@ -152,14 +152,23 @@ pub const DotFileWriter = struct {
 
 fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: std.mem.Allocator) ![]u8 {
     const cache_root = root_b.graph.global_cache_root.path.?;
-    const raw_label = if (std.mem.startsWith(u8, dep_b.build_root.path.?, cache_root))
-        dep_b.build_root.path.?[cache_root.len + std.fs.path.sep_str.len * 2 + 1 ..]
-    else if (dep_b == root_b)
-        std.fs.path.basename(root_b.build_root.path.?)
-    else if (std.mem.startsWith(u8, dep_b.build_root.path.?, root_b.build_root.path.?))
-        dep_b.build_root.path.?[root_b.build_root.path.?.len..]
+    return buildRootEscaped(
+        cache_root,
+        root_b.build_root.path.?,
+        dep_b.build_root.path.?,
+        gpa,
+    );
+}
+
+pub fn buildRootEscaped(cache_root: []const u8, build_root: []const u8, dep_root: []const u8, gpa: std.mem.Allocator) ![]u8 {
+    const raw_label = if (std.mem.startsWith(u8, dep_root, cache_root))
+        dep_root[cache_root.len + std.fs.path.sep_str.len * 2 + 1 ..]
+    else if (std.mem.eql(u8, build_root, dep_root))
+        std.fs.path.basename(build_root)
+    else if (std.mem.startsWith(u8, dep_root, build_root))
+        dep_root[build_root.len..]
     else
-        dep_b.build_root.path.?;
+        build_root;
 
     return std.mem.replaceOwned(
         u8,
@@ -170,8 +179,8 @@ fn depBuildRootEscaped(root_b: *const std.Build, dep_b: *const std.Build, gpa: s
     );
 }
 
-fn stepColor(step: *std.Build.Step) []const u8 {
-    return switch (step.id) {
+pub fn stepColor(id: std.Build.Step.Id) []const u8 {
+    return switch (id) {
         .compile => "#6495ed",
         .install_artifact => "#309430",
         .install_dir => "#8b4513",
