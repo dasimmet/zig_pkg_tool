@@ -26,9 +26,9 @@ pub const Dependency = struct {
     edges: ?Index = null,
 
     pub const Context = struct {
-        pub const Index = std.AutoArrayHashMapUnmanaged(*std.Build, Dependency);
+        pub const Index = std.StringArrayHashMapUnmanaged(Dependency);
         index: Context.Index,
-        deps: std.AutoArrayHashMapUnmanaged(*std.Build, std.ArrayListUnmanaged(Edge)),
+        deps: std.StringArrayHashMapUnmanaged(std.ArrayListUnmanaged(Edge)),
     };
 };
 
@@ -96,9 +96,9 @@ pub fn init(b: *std.Build) anyerror!@This() {
 }
 
 pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, parent: ?Dependency.Index) !void {
-    const gop_deps = try ctx.deps.getOrPut(root_b.allocator, b);
+    const gop_deps = try ctx.deps.getOrPut(root_b.allocator, b.build_root.path.?);
     if (!gop_deps.found_existing) gop_deps.value_ptr.* = .empty;
-    const gop = try ctx.index.getOrPut(root_b.allocator, b);
+    const gop = try ctx.index.getOrPut(root_b.allocator, b.build_root.path.?);
     if (!gop.found_existing) {
         gop.value_ptr.* = .{
             .name = depBuildRoot(root_b, b),
@@ -117,8 +117,8 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
             .id = @intCast(gop.index),
         });
     }
-    const gop2 = try ctx.index.getOrPut(root_b.allocator, b);
-    const gop_deps2 = try ctx.deps.getOrPut(root_b.allocator, b);
+    const gop2 = try ctx.index.getOrPut(root_b.allocator, b.build_root.path.?);
+    const gop_deps2 = try ctx.deps.getOrPut(root_b.allocator, b.build_root.path.?);
 
     var dep_it: usize = 0;
     for (b.available_deps) |dep| {
@@ -177,7 +177,7 @@ pub fn addStepsRecurse(b: *std.Build, steps: *Step.Context) !void {
     while (tld_iter.next()) |tld| {
         const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(&tld.value_ptr.*.step));
         const dep_gop = try steps.deps.getOrPut(b.allocator, @intFromPtr(&tld.value_ptr.*.step));
-        const build_idx = steps.builds.getIndex(tld.value_ptr.*.step.owner);
+        const build_idx = steps.builds.getIndex(tld.value_ptr.*.step.owner.build_root.path.?);
         if (!dep_gop.found_existing) dep_gop.value_ptr.* = .empty;
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
@@ -201,7 +201,7 @@ pub fn addDepSteps(b: *Build, step: Build.Step, steps: *Step.Context, parent: ?u
             dep_gop.value_ptr.* = .empty;
         }
         const gop = try steps.steps.getOrPut(b.allocator, @intFromPtr(dep));
-        const build_idx = steps.builds.getIndex(dep.owner);
+        const build_idx = steps.builds.getIndex(dep.owner.build_root.path.?);
         if (!gop.found_existing) {
             gop.value_ptr.* = .{
                 .id = dep.id,

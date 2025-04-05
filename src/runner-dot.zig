@@ -3,7 +3,7 @@ pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 
 pub fn main() !void {
-    return try @import("runner-zig.zig").mainBuild(.{
+    return try @import("runner-zig.zig").runner.mainBuild(.{
         .executeBuildFn = build_main,
         .ctx = null,
     });
