@@ -58,16 +58,7 @@ pub fn build(b: *std.Build) void {
     b.step("test", "run tests").dependOn(&test_run.step);
     b.default_step.dependOn(&test_run.step);
     {
-        const dotgraph = dotGraphStepInternal(b, zigpkg, &.{
-            "install",
-            "deppkg",
-            "dot",
-            "exe",
-            "fmt",
-            "menuconfig",
-            "test",
-            "zigpkg",
-        }).captureStdOut();
+        const dotgraph = dotGraphStepInternal(b, zigpkg, &.{}).captureStdOut();
         const svggraph = svgGraph(b, dotgraph);
 
         const update_dotgraph = b.addUpdateSourceFiles();
@@ -103,11 +94,6 @@ pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath 
         "dot",
         "-Kdot",
         "-Tsvg",
-        "-Goverlap=false",
-        "-x",
-        "-Ln100",
-        "-LO",
-        "-Lg",
     });
     svggraph.setName("dot to svg");
     const svggraph_out = svggraph.addPrefixedOutputFileArg("-o", "graph.svg");
@@ -124,7 +110,7 @@ fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []
     const dotgraph = b.addRunArtifact(zigpkg);
     dotgraph.setName("dot generation");
     dotgraph.addArgs(&.{
-        "dot",
+        "dotall",
         b.build_root.path.?,
     });
     zigRunEnv(b, dotgraph);

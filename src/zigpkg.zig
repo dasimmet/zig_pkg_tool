@@ -14,7 +14,8 @@ const usage =
     \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\available subcommands:
-    \\  dot     rerun "zig build" and output a graphviz ".dot" file of all build steps
+    \\  dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
+    \\  dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
     \\  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
     \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
     \\          dependencies required to build a zig package
@@ -45,7 +46,7 @@ const Command = struct {
 
 const commands = &.{
     .{ "dot", cmd_dot },
-    .{ "dot2", cmd_dot2 },
+    .{ "dotall", cmd_dotall },
     .{ "deppkg", cmd_deppkg },
     .{ "zon", cmd_zon },
 };
@@ -309,7 +310,7 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
     return runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
 }
 
-pub fn cmd_dot2(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !void {
     var arg_sep: usize = 0;
     var root: []const u8 = ".";
     for (args) |arg| {
