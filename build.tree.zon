@@ -43,15 +43,29 @@
             .name = "zig_pkg_tool",
             .location = .root,
             .edges = 0,
+            .minimum_zig_version = "0.15.0-dev.132+263ba3461",
         },
-        .{ .name = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g", .location = .cache },
-        .{ .name = "zigimg-0.1.0-lly-O-NTEABwkjg9_WM4uLQr_TtL-7jp375PsZJyugGN", .location = .cache },
+        .{
+            .name = "vaxis-0.1.0-BWNV_BzyCADK2dn8dd4IAD2HjdgAFw34iRiNMX00-14g",
+            .location = .cache,
+            .minimum_zig_version = "0.14.0",
+        },
+        .{
+            .name = "zigimg-0.1.0-lly-O-NTEABwkjg9_WM4uLQr_TtL-7jp375PsZJyugGN",
+            .location = .cache,
+            .minimum_zig_version = null,
+        },
         .{
             .name = "zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM",
             .location = .cache,
             .edges = 3,
+            .minimum_zig_version = "0.13.0",
         },
-        .{ .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL", .location = .cache },
+        .{
+            .name = "known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL",
+            .location = .cache,
+            .minimum_zig_version = "0.14.0-dev.3445+6c3cbb0c8",
+        },
     },
     .dependency_edges = .{
         .{ .name = "vaxis", .id = 1 },
