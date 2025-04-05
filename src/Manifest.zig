@@ -14,6 +14,7 @@ name: []const u8,
 paths: []const []const u8,
 version: []const u8,
 dependencies: ?zonparse.ZonStructHashMap(Dependency) = null,
+minimum_zig_version: ?[]const u8 = null,
 
 pub fn fromSlice(
     allocator: std.mem.Allocator,

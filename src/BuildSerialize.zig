@@ -1,6 +1,7 @@
 const std = @import("std");
 const Build = std.Build;
 const builtin = @import("builtin");
+const Manifest = @import("Manifest.zig");
 
 const Serialized = @This();
 options: struct {
@@ -24,6 +25,7 @@ pub const Dependency = struct {
     name: []const u8,
     location: Location,
     edges: ?Index = null,
+    minimum_zig_version: ?[]const u8,
 
     pub const Context = struct {
         pub const Index = std.StringArrayHashMapUnmanaged(Dependency);
@@ -102,6 +104,7 @@ pub fn recurse(root_b: *std.Build, ctx: *Dependency.Context, b: *std.Build, pare
     if (!gop.found_existing) {
         gop.value_ptr.* = .{
             .name = depBuildRoot(root_b, b),
+            .minimum_zig_version = try minimumZigVersion(b),
             .location = Location.fromRootBuildAndPath(root_b, b.build_root.path.?),
             .edges = @intCast(gop_deps.index),
         };
@@ -317,3 +320,14 @@ pub const TypeId = enum {
     lazy_path,
     lazy_path_list,
 };
+
+pub fn minimumZigVersion(b: *Build) !?[]const u8 {
+    const zon_path = try std.fs.path.join(b.allocator, &.{b.build_root.path.?, "build.zig.zon"});
+    const zon_file = std.fs.cwd().readFileAllocOptions(b.allocator ,zon_path, std.math.maxInt(u32), null, 1, 0) catch |err| switch (err) {
+        error.FileNotFound => return null,
+        else => return err,
+    };
+
+    const zf = try Manifest.fromSlice(b.allocator, zon_file, null);
+    return zf.minimum_zig_version;
+}
