@@ -42,6 +42,12 @@ pub fn build(b: *std.Build) void {
     b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
 
+    _ = b.addModule("Manifest", .{
+        .root_source_file = b.path("src/Manifest.zig"),
+        .target = target,
+        .optimize = opt,
+    });
+
     const zigpkg = build_zigpkg(b, target, opt);
     b.installArtifact(zigpkg);
 
