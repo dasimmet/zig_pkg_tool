@@ -397,6 +397,7 @@ pub fn free(gpa: Allocator, value: anytype) void {
             if (isZonStructHashMap(Value)) {
                 var kv_iter = value.impl.iterator();
                 while (kv_iter.next()) |kv| {
+                    free(gpa, kv.key_ptr.*);
                     free(gpa, kv.value_ptr.*);
                 }
                 @constCast(&value.impl).deinit(gpa);
@@ -870,7 +871,7 @@ const Parser = struct {
         };
         var result: T = .{};
         for (0..fields.names.len) |i| {
-            const name: []const u8 = fields.names[i].get(self.zoir)[0..];
+            const name: []const u8 = try self.gpa.dupe(u8, fields.names[i].get(self.zoir)[0..]);
             const value = try self.parseExpr(
                 T.Value,
                 fields.vals.at(@intCast(i)),
