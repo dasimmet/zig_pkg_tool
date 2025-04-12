@@ -26,14 +26,17 @@ usage: zigpkg <subcommand> [--help]
 stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
 
 available subcommands:
-  dot     rerun "zig build" and output a graphviz ".dot" file of all build steps
+  dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
+  dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
   zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
+  json    same as "zon" but output json
   deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
           dependencies required to build a zig package
 
 environment variables:
 
   ZIG: path to the zig compiler to invoke in subprocesses. defaults to "zig".
+
 ```
 
 ## Dependency packages

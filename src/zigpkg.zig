@@ -17,6 +17,7 @@ const usage =
     \\  dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
     \\  dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
     \\  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
+    \\  json    same as "zon" but output json
     \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
     \\          dependencies required to build a zig package
     \\
@@ -49,6 +50,7 @@ const commands = &.{
     .{ "dotall", cmd_dotall },
     .{ "deppkg", cmd_deppkg },
     .{ "zon", cmd_zon },
+    .{ "json", cmd_json },
 };
 
 const deppkg_commands: CommandMap = &.{
@@ -365,7 +367,28 @@ pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !void {
     try opt.stdout.writeAll(dot.DotFileWriter.footer);
 }
 
+pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
+    const b = try zonOutputCmd(opt, args);
+    defer b.deinit(opt.gpa);
+
+    try std.json.stringify(b.parsed, .{
+        .whitespace = .indent_4,
+    }, opt.stdout);
+    try opt.stdout.writeAll("\n");
+}
+
 pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
+    const b = try zonOutputCmd(opt, args);
+    defer b.deinit(opt.gpa);
+
+    try std.zon.stringify.serialize(b.parsed, .{
+        .whitespace = true,
+        .emit_default_optional_fields = false,
+    }, opt.stdout);
+    try opt.stdout.writeAll("\n");
+}
+
+pub fn zonOutputCmd(opt: GlobalOptions, args: []const []const u8) !SerializedZonType(Serialize) {
     var arg_sep: usize = 0;
     var root: []const u8 = ".";
     for (args) |arg| {
@@ -381,32 +404,28 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
             return error.UnknownArgument;
         }
     }
-    const serialized_b = try runZonStdoutCommand(
+
+    return runZonStdoutCommand(
         opt,
         "runner-zon.zig",
         root,
         args[arg_sep..],
         Serialize,
     );
-    defer serialized_b.deinit(opt.gpa);
-
-    // std.log.info("Build: \n{any}\n", .{serialized_b.parsed});
-
-    try std.zon.stringify.serialize(serialized_b.parsed, .{
-        .whitespace = true,
-        .emit_default_optional_fields = false,
-    }, opt.stdout);
-    try opt.stdout.writeAll("\n");
 }
 
-pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !struct {
-    parsed: T,
-    source: [:0]u8,
-    pub fn deinit(self: @This(), gpa: std.mem.Allocator) void {
-        gpa.free(self.source);
-        std.zon.parse.free(gpa, self.parsed);
-    }
-} {
+pub fn SerializedZonType(T: type) type {
+    return struct {
+        parsed: T,
+        source: [:0]u8,
+        pub fn deinit(self: @This(), gpa: std.mem.Allocator) void {
+            gpa.free(self.source);
+            std.zon.parse.free(gpa, self.parsed);
+        }
+    };
+}
+
+pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !SerializedZonType(T) {
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
