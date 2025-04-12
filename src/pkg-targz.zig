@@ -260,9 +260,17 @@ pub fn process(opt: Options) !void {
             include_entry: {
                 if (manifest) |mani| {
                     if (std.mem.eql(u8, entry.path, "build.zig.zon")) break :include_entry;
-                    for (mani.paths) |p| {
-                        if (std.mem.startsWith(u8, entry.path, p)) {
-                            break :include_entry;
+                    if (mani.paths) |paths| {
+                        for (paths) |p| {
+                            if (std.mem.startsWith(u8, entry.path, p)) {
+                                break :include_entry;
+                            }
+                        }
+                    } else {
+                        for (default_ignores) |ignore| {
+                            if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
+                                continue :outer;
+                            }
                         }
                     }
                     continue :outer;

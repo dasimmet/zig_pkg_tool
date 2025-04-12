@@ -11,8 +11,9 @@ pub const Dependency = struct {
 };
 
 name: []const u8,
-paths: []const []const u8,
+paths: ?[]const []const u8 = null,
 version: []const u8,
+fingerprint: ?usize = null,
 dependencies: ?zonparse.ZonStructHashMap(Dependency) = null,
 minimum_zig_version: ?[]const u8 = null,
 
