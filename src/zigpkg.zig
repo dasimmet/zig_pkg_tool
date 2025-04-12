@@ -372,9 +372,8 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
     defer b.deinit(opt.gpa);
 
     try std.json.stringify(b.parsed, .{
-        .whitespace = .indent_4,
+        .emit_null_optional_fields = false,
     }, opt.stdout);
-    try opt.stdout.writeAll("\n");
 }
 
 pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
