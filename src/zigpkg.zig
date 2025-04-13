@@ -382,6 +382,7 @@ pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !void {
         .emit_null_optional_fields = false,
     }, opt.stdout);
     try opt.stdout.writeAll(html_tpl[marker_pos + payload_marker.len ..]);
+    try opt.stdout.writeAll("\n");
 }
 
 pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
