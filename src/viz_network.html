@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Network</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style type="text/css">
+        #mynetwork {
+            width: 95vw;
+            height: 95vh;
+            border: 1px solid lightgray;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="mynetwork"></div>
+    <script type="text/javascript">
+        const payload = { steps: [], UNIQUE_MARKER_FOR_PAYLOAD: true };
+        // create an array with nodes
+        var nodes = [];
+        // create an array with edges
+        var edges = [];
+        payload.steps.forEach((ele, idx) => {
+            nodes.push({ id: idx, label: ele.name, cid: ele.owner });
+            ele.dependencies.forEach((dep, didx) => {
+                edges.push({ from: idx, to: dep });
+            });
+        })
+        console.log(nodes);
+        console.log(edges);
+
+        // create a network
+        var container = document.getElementById("mynetwork");
+        var data = {
+            nodes: new vis.DataSet(nodes),
+            edges: new vis.DataSet(edges),
+        };
+        var options = {
+            edges: {
+                arrows: 'to',
+            },
+        };
+        var network = new vis.Network(container, data, options);
+    </script>
+</body>
+
+</html>

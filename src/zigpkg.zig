@@ -16,6 +16,7 @@ const usage =
     \\available subcommands:
     \\  dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
     \\  dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
+    \\  dothtml "dotall", but output html for vis.js instead of ".dit"
     \\  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
     \\  json    same as "zon" but output json
     \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
@@ -48,6 +49,7 @@ const Command = struct {
 const commands = &.{
     .{ "dot", cmd_dot },
     .{ "dotall", cmd_dotall },
+    .{ "dothtml", cmd_dothtml },
     .{ "deppkg", cmd_deppkg },
     .{ "zon", cmd_zon },
     .{ "json", cmd_json },
@@ -365,6 +367,21 @@ pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !void {
         try opt.stdout.writeAll(dot.DotFileWriter.cluster_footer);
     }
     try opt.stdout.writeAll(dot.DotFileWriter.footer);
+}
+
+pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !void {
+    const b = try zonOutputCmd(opt, args);
+    defer b.deinit(opt.gpa);
+
+    const html_tpl = @embedFile("viz_network.html");
+    const payload_marker = "{ steps: [], UNIQUE_MARKER_FOR_PAYLOAD: true }";
+    const marker_pos = std.mem.indexOf(u8, html_tpl, payload_marker).?;
+
+    try opt.stdout.writeAll(html_tpl[0..marker_pos]);
+    try std.json.stringify(b.parsed, .{
+        .emit_null_optional_fields = false,
+    }, opt.stdout);
+    try opt.stdout.writeAll(html_tpl[marker_pos + payload_marker.len ..]);
 }
 
 pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
