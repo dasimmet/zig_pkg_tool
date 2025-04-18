@@ -240,7 +240,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
         args[1],
         std.math.maxInt(u32),
         1048576,
-        @alignOf(u8),
+        Serialize.align_one,
         0,
     );
 
