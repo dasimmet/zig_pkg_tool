@@ -14,9 +14,15 @@ const builtin = @import("builtin");
 // So in this file, switch out `zonparse` based on the zig compiler version
 // so it stays compatible with `master` as well as the release version
 
-// 0.15.0-dev.168+b636d56d6
+// 0.15.0-dev.375+8f8f37fb0
+// https://github.com/dasimmet/zig/blob/zon-struct-hashmap/lib/std/zon/parse.zig
 
 pub const zonparse = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
     @import("zonparse-master.zig")
 else
     @import("zonparse-0.14.0.zig");
+
+pub const Diagnostics = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
+    zonparse.Diagnostics
+else
+    zonparse.Status;

@@ -229,15 +229,15 @@ pub fn process(opt: Options) !void {
             try zf.reader().readAllArrayList(&zon_src, std.math.maxInt(u32));
             try zon_src.append(0);
 
-            var zonStatus: Manifest.zonparse.Status = .{};
-            defer zonStatus.deinit(opt.gpa);
+            var zonDiag: Manifest.ZonDiag = .{};
+            defer zonDiag.deinit(opt.gpa);
 
             manifest = Manifest.fromSlice(
                 opt.gpa,
                 @ptrCast(zon_src.items[0 .. zon_src.items.len - 1]),
-                &zonStatus,
+                &zonDiag,
             ) catch |e| {
-                Manifest.log(std.log.err, e, fs_path, zonStatus);
+                Manifest.log(std.log.err, e, fs_path, zonDiag);
                 return e;
             };
         }
