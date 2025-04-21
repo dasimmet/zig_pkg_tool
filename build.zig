@@ -12,26 +12,6 @@ pub fn build(b: *std.Build) void {
 
     const target = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});
-    const exe = b.addExecutable(.{
-        .name = "menuconfig",
-        .root_source_file = b.path("src/menuconfig.zig"),
-        .target = target,
-        .optimize = opt,
-    });
-    b.step("exe", "install menuconfig").dependOn(&b.addInstallArtifact(exe, .{}).step);
-
-    const run = b.addRunArtifact(exe);
-    run.setEnvironmentVariable("ZIG_CACHE_DIR", b.cache_root.path.?);
-
-    if (b.lazyDependency("vaxis", .{
-        .target = target,
-        .optimize = opt,
-    })) |vaxis| {
-        exe.root_module.addImport("vaxis", vaxis.module("vaxis"));
-    }
-
-    const config_step = b.step("menuconfig", "example menu");
-    config_step.dependOn(&run.step);
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
     const depPkgArc = depPackagesInternal(b, b, .{ .name = "depkg" });
