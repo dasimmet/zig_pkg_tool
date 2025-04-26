@@ -17,26 +17,44 @@
     <div id="mynetwork"></div>
     <script type="text/javascript">
         const payload = { steps: [], UNIQUE_MARKER_FOR_PAYLOAD: true };
-        // create an array with nodes
         var nodes = [];
-        // create an array with edges
         var edges = [];
-        payload.steps.forEach((ele, idx) => {
-            nodes.push({ id: idx, label: ele.name, cid: ele.owner });
-            ele.dependencies.forEach((dep, didx) => {
-                edges.push({ from: idx, to: dep });
-            });
-        })
-        console.log(nodes);
-        console.log(edges);
+        var groups = [];
 
+        var group_links = {};
+        const group_link_length = 5;
+        payload.steps.forEach((ele, idx) => {
+            const owner = `group_${ele.owner}`;
+            nodes.push({ id: idx, label: ele.name, cid: ele.owner, group: owner });
+            ele.dependencies.forEach((dep) => {
+                group_links[(idx, dep)] = 1;
+                group_links[(dep, idx)] = 1;
+                const length = payload.steps[dep].owner == idx.owner ? group_link_length : group_link_length * 10;
+                edges.push({ from: idx, to: dep, length: length });
+            });
+            payload.steps.forEach((dele, didx) => {
+                if (idx != didx && ele.owner == dele.owner) {
+                    if (group_links[(idx, didx)] == undefined) {
+                        group_links[(idx, didx)] = 1;
+                        group_links[(didx, idx)] = 1;
+                        edges.push({ from: idx, to: didx, hidden: true, length: group_link_length });
+                    }
+                }
+            });
+
+            if (groups[owner] == undefined) {
+                groups[owner] = {};
+            }
+        });
         // create a network
         var container = document.getElementById("mynetwork");
         var data = {
             nodes: new vis.DataSet(nodes),
             edges: new vis.DataSet(edges),
+            groups: new vis.DataSet(groups),
         };
         var options = {
+            physics: { barnesHut: { springConstant: 0.01 } },
             edges: {
                 arrows: 'to',
             },
