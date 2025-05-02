@@ -7,6 +7,7 @@ pub const Manifest = @import("Manifest.zig");
 const Serialize = @import("BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
 const dot = @import("runner-dot.zig");
+const viz_network = @import("viz_network.html.zig").viz_network;
 
 const usage =
     \\usage: zigpkg <subcommand> [--help]
@@ -373,16 +374,7 @@ pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !void {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
-    const html_tpl = @embedFile("viz_network.html");
-    const payload_marker = "{ steps: [], UNIQUE_MARKER_FOR_PAYLOAD: true }";
-    const marker_pos = std.mem.indexOf(u8, html_tpl, payload_marker).?;
-
-    try opt.stdout.writeAll(html_tpl[0..marker_pos]);
-    try std.json.stringify(b.parsed, .{
-        .emit_null_optional_fields = false,
-    }, opt.stdout);
-    try opt.stdout.writeAll(html_tpl[marker_pos + payload_marker.len ..]);
-    try opt.stdout.writeAll("\n");
+    try viz_network.render(b.parsed, opt.stdout);
 }
 
 pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {

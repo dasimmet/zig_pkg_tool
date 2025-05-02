@@ -186,6 +186,9 @@ pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
     const cwd = std.fs.cwd();
+    if (std.fs.path.dirname(opt.out_path)) |dir| {
+        try cwd.makePath(dir);
+    }
     var output = try cwd.createFile(opt.out_path, .{});
     defer output.close();
 
