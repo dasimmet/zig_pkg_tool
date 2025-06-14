@@ -16,13 +16,14 @@ const builtin = @import("builtin");
 
 // 0.15.0-dev.375+8f8f37fb0
 // https://github.com/dasimmet/zig/blob/zon-struct-hashmap/lib/std/zon/parse.zig
+const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
 
-pub const zonparse = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
+pub const zonparse = if (zig_15_or_later)
     @import("zonparse-master.zig")
 else
     @import("zonparse-0.14.0.zig");
 
-pub const Diagnostics = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
+pub const Diagnostics = if (zig_15_or_later)
     zonparse.Diagnostics
 else
     zonparse.Status;

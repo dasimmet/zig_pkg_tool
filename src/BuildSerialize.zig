@@ -321,7 +321,8 @@ pub const TypeId = enum {
     lazy_path_list,
 };
 
-pub const align_one = if (builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) == .gt)
+const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
+pub const align_one = if (zig_15_or_later)
     std.mem.Alignment.@"1"
 else
     1;
