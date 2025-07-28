@@ -2,7 +2,7 @@
     .name = .pkg_tool,
     .version = "0.0.0",
     .fingerprint = 0xeec6d0d326821008,
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.0-dev.1262+e12dc4947",
     .dependencies = .{
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders.git#92defaee76b07487769ca352fd0ba95bc8b42a2f",
