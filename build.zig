@@ -121,9 +121,11 @@ fn zigRunEnv(b: *std.Build, run: *std.Build.Step.Run) void {
 pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.builtin.OptimizeMode) *std.Build.Step.Compile {
     const zigpkg = b.addExecutable(.{
         .name = "zigpkg",
-        .root_source_file = b.path("src/zigpkg.zig"),
-        .target = target,
-        .optimize = opt,
+        .root_module = b.addModule("zigpkg", .{
+            .root_source_file = b.path("src/zigpkg.zig"),
+            .target = target,
+            .optimize = opt,
+        }),
     });
     if (target.result.os.tag == .windows) {
         zigpkg.linkLibC();
