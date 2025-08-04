@@ -37,8 +37,8 @@ const GlobalOptions = struct {
     debug_level: u8 = 0,
     zig_exe: []const u8,
     env_map: std.process.EnvMap,
-    stdout: std.io.AnyWriter,
-    stderr: std.io.AnyWriter,
+    stdout: *std.io.Writer,
+    stderr: *std.io.Writer,
 };
 
 const CommandMap = []const Command;
@@ -75,7 +75,12 @@ pub fn main() !void {
     var env_map = try std.process.getEnvMap(gpa);
     defer env_map.deinit();
 
-    const stdout = std.io.getStdOut().writer().any();
+    var stdout_buf: [128]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdout_buf).interface;
+
+    var stderr_buf: [128]u8 = undefined;
+    var stderr = std.fs.File.stdout().writer(&stderr_buf).interface;
+
     if (args.len < 2) {
         try stdout.writeAll(usage);
         return std.process.exit(1);
@@ -95,8 +100,8 @@ pub fn main() !void {
         .cwd = cwd,
         .zig_exe = env_map.get("ZIG") orelse "zig",
         .env_map = env_map,
-        .stdout = stdout,
-        .stderr = std.io.getStdErr().writer().any(),
+        .stdout = &stdout,
+        .stderr = &stderr,
     };
     for (args[1..]) |arg| {
         if (std.mem.eql(u8, arg, "--debug")) opt.debug_level += 1;
