@@ -41,7 +41,7 @@ pub fn deinit(self: Manifest, allocator: std.mem.Allocator) void {
 const LogFunction = @TypeOf(std.log.err);
 
 pub fn log(logfn: LogFunction, err: anyerror, manifest_path: []const u8, diag: ZonDiag) void {
-    const fmt_str = "Manifest: {s} {s}" ++ std.fs.path.sep_str ++ basename ++ ":{}";
+    const fmt_str = "Manifest: {s} {s}" ++ std.fs.path.sep_str ++ basename ++ ":{f}";
     logfn(fmt_str, .{ @errorName(err), manifest_path, diag });
 }
 

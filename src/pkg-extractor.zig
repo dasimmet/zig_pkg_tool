@@ -1,6 +1,5 @@
 const std = @import("std");
 const tar = std.tar;
-const gzip = std.compress.gzip;
 const TempFile = @import("TempFile.zig");
 const tar_prefix = "build/p/";
 pub fn main() !void {
@@ -48,22 +47,29 @@ pub fn process(opt: Options) !void {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
             opt.gpa.free(a.hash);
-            a.tar.finish() catch @panic("tar could not be finished");
-            a.tf.deinit();
         }
         temp.deinit();
     }
 
     const fd = try std.fs.cwd().openFile(opt.filepath, .{});
-    var gz = gzip.decompressor(fd.reader());
+    var fbuf: [8192]u8 = undefined;
+    var freader = fd.reader(&fbuf);
+
+    const gz_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
+    defer opt.gpa.free(gz_buf);
+    var gz = std.compress.flate.Decompress.init(
+        &freader.interface,
+        .gzip,
+        gz_buf,
+    );
 
     var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var t = tar.iterator(gz.reader(), .{
+    var it: tar.Iterator = .init(&gz.reader, .{
         .file_name_buffer = &file_name_buffer,
         .link_name_buffer = &link_name_buffer,
     });
-    while (try t.next()) |entry| {
+    while (try it.next()) |entry| {
         if (!std.mem.startsWith(u8, entry.name, tar_prefix)) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,
@@ -83,10 +89,15 @@ pub fn process(opt: Options) !void {
                     .prefix = hash,
                     .suffix = ".tar",
                 }),
+                .filew = undefined,
                 .name_offset = sep_idx,
+                .tarbuf = undefined,
                 .tar = undefined,
             };
-            gop.value_ptr.*.tar = tar.writer(gop.value_ptr.*.tf.f.writer());
+            gop.value_ptr.*.filew = gop.value_ptr.*.tf.f.writer(&gop.value_ptr.*.tarbuf);
+            gop.value_ptr.*.tar = tar.Writer{
+                .underlying_writer = &gop.value_ptr.*.filew.interface,
+            };
             std.debug.print("e: {s}\n{s}\n", .{
                 entry.name,
                 gop.value_ptr.*.tf.abs_path,
@@ -100,7 +111,7 @@ pub fn process(opt: Options) !void {
             .file => try gop.value_ptr.tar.writeFileStream(
                 short_name,
                 entry.size,
-                entry.reader(),
+                it.reader,
                 .{
                     .mode = entry.mode,
                 },
@@ -127,7 +138,7 @@ pub fn process(opt: Options) !void {
 
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
-            a.tar.finish() catch @panic("tar could not be finished");
+            a.tar.underlying_writer.flush() catch @panic("tar could not be finished");
             std.log.info("zig fetch {s}", .{a.tf.abs_path});
             const res = try std.process.Child.run(.{
                 .allocator = opt.gpa,
@@ -166,7 +177,9 @@ pub fn process(opt: Options) !void {
 
 const TempTar = struct {
     tf: TempFile.TmpFile,
+    filew: std.fs.File.Writer,
     name_offset: usize,
     hash: []const u8,
-    tar: @TypeOf(tar.writer(std.io.getStdOut().writer())),
+    tarbuf: [64]u8,
+    tar: tar.Writer,
 };

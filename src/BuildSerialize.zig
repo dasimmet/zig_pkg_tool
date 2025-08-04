@@ -45,7 +45,7 @@ pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) ![
     var serialized: Serialized = try Serialized.init(b);
     defer serialized.deinit(b);
 
-    var output = std.io.Writer.Allocating.init(b.allocator);
+    var output: std.io.Writer.Allocating = .init(b.allocator);
     std.zon.stringify.serialize(
         serialized,
         opt,

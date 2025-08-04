@@ -127,12 +127,13 @@ pub fn fromBuild(
             std.debug.assert(dep.location == .root);
             try tar_paths.append(try gpa.dupe(u8, "build/root"));
             try fs_paths.append(try gpa.dupe(u8, root));
-            var zon_file = std.ArrayList(u8).init(gpa);
-            try zon_file.appendSlice("raw:");
+            var zon_file = std.io.Writer.Allocating.init(gpa);
+            try zon_file.writer.writeAll("raw:");
             try std.zon.stringify.serialize(build, .{
                 .whitespace = true,
                 .emit_default_optional_fields = false,
-            }, zon_file.writer());
+            }, &zon_file.writer);
+
             try tar_paths.append(try gpa.dupe(u8, "build/root.zon"));
             try fs_paths.append(try zon_file.toOwnedSlice());
         } else {
@@ -189,17 +190,32 @@ pub fn process(opt: Options) !void {
     if (std.fs.path.dirname(opt.out_path)) |dir| {
         try cwd.makePath(dir);
     }
-    var output = try cwd.createFile(opt.out_path, .{});
-    defer output.close();
 
-    var compress = try std.compress.gzip.compressor(output.writer(), .{});
-    defer compress.finish() catch @panic("compress finish error");
+    var out_file = try cwd.createFile(opt.out_path, .{});
+    defer out_file.close();
+    var out_buf: [8192]u8 = undefined;
+    var output = out_file.writer(&out_buf);
 
-    var archive = std.tar.writer(compress.writer().any());
-    defer archive.finish() catch @panic("archive finish error");
+    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
+    defer opt.gpa.free(compress_buf);
+    var compress = std.compress.flate.Compress.init(
+        &output.interface,
+        compress_buf,
+        .{
+            .container = .gzip,
+            .level = .best,
+        },
+    );
+    defer compress.end() catch @panic("compless flush error");
 
-    var zon_src: std.ArrayList(u8) = .init(opt.gpa);
-    defer zon_src.deinit();
+    var archive = std.tar.Writer{
+        .underlying_writer = &compress.writer,
+    };
+    defer archive.underlying_writer.flush() catch @panic("archive finish error");
+
+    var zon_src: std.ArrayListUnmanaged(u8) = .empty;
+    defer zon_src.deinit(opt.gpa);
+    var zon_src_writer = std.io.Writer.Allocating.fromArrayList(opt.gpa, &zon_src);
 
     for (opt.fs_paths, 0..) |fs_path, i| {
         const archive_path = opt.tar_paths[i];
@@ -211,7 +227,6 @@ pub fn process(opt: Options) !void {
             continue;
         }
 
-        // std.log.info("tar_path: {s}:{s}", .{ archive_path, fs_path });
         try archive.setRoot(archive_path);
 
         var input = try cwd.openDir(fs_path, .{
@@ -229,8 +244,10 @@ pub fn process(opt: Options) !void {
         if (zon_file) |zf| {
             defer zf.close();
             zon_src.clearRetainingCapacity();
-            try zf.reader().readAllArrayList(&zon_src, std.math.maxInt(u32));
-            try zon_src.append(0);
+            var zfb: [32]u8 = undefined;
+            var zfw: std.fs.File.Reader = zf.reader(&zfb);
+            _ = try zfw.interface.stream(&zon_src_writer.writer, .unlimited);
+            try zon_src_writer.writer.writeByte(0);
 
             var zonDiag: Manifest.ZonDiag = .{};
             defer zonDiag.deinit(opt.gpa);
@@ -292,21 +309,36 @@ pub fn process(opt: Options) !void {
                 _ = std.mem.replace(u8, entry.path, std.fs.path.sep_str, std.fs.path.sep_str_posix, arc_path);
                 arc_entry.path = arc_path;
             }
-            defer {
-                if (@import("builtin").os.tag == .windows) {
-                    defer opt.gpa.free(arc_entry.path);
-                }
+            if (@import("builtin").os.tag == .windows) {
+                defer opt.gpa.free(arc_entry.path);
             }
 
-            archive.writeEntry(arc_entry) catch |e| {
-                switch (e) {
-                    error.IsDir => continue,
-                    else => {
-                        std.log.err("file: {s}\n{s}\n{s}", .{ fs_path, entry.path, arc_entry.path });
-                        return e;
-                    },
-                }
-            };
+            try writeTarEntry(&archive, &arc_entry);
         }
+    }
+}
+
+pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !void {
+    const file = std.fs.cwd().openFile(
+        entry.path,
+        .{},
+    ) catch |e| switch (e) {
+        error.IsDir => return,
+        else => return e,
+    };
+    defer file.close();
+
+    switch (entry.kind) {
+        .file => {
+            var buf: [64]u8 = undefined;
+            const stat = try std.fs.cwd().statFile(entry.path);
+            var reader = file.reader(&buf);
+            try arc.writeFile(
+                entry.path,
+                &reader,
+                stat.mtime,
+            );
+        },
+        else => return,
     }
 }

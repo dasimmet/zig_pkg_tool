@@ -63,7 +63,7 @@ pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
 pub const TmpDir = struct {
     pub const TmpDirArgs = struct {
         prefix: ?[]const u8 = null,
-        opts: std.fs.Dir.OpenDirOptions = .{},
+        opts: std.fs.Dir.OpenOptions = .{},
     };
 
     allocator: std.mem.Allocator,
@@ -156,7 +156,7 @@ pub const TmpFile = struct {
         suffix: ?[]const u8 = null,
         dir_prefix: ?[]const u8 = null,
         flags: std.fs.File.CreateFlags = .{ .read = true },
-        dir_opts: std.fs.Dir.OpenDirOptions = .{},
+        dir_opts: std.fs.Dir.OpenOptions = .{},
     };
 
     allocator: std.mem.Allocator,
@@ -274,7 +274,7 @@ pub inline fn tmpFile(args: struct {
     suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
     flags: std.fs.File.CreateFlags = .{ .read = true },
-    dir_opts: std.fs.Dir.OpenDirOptions = .{},
+    dir_opts: std.fs.Dir.OpenOptions = .{},
 }) !TmpFile {
     const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
     if (args.tmp_dir) |tmp_dir| {

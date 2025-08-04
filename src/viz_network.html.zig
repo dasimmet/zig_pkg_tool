@@ -17,11 +17,12 @@ const JsonTemplate = struct {
     }
 
     pub fn render(self: @This(), content: anytype, writer: anytype) !void {
-        try writer.writeAll(self.prefix);
-        try std.json.stringify(content, .{
-            .emit_null_optional_fields = false,
-        }, writer);
-        try writer.writeAll(self.suffix);
-        try writer.writeAll("\n");
+        try writer.print("{s}{f}{s}\n", .{
+            self.prefix,
+            std.json.fmt(content, .{
+                .emit_null_optional_fields = false,
+            }),
+            self.suffix,
+        });
     }
 };

@@ -76,10 +76,14 @@ pub fn main() !void {
     defer env_map.deinit();
 
     var stdout_buf: [128]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&stdout_buf).interface;
+    var stdout_file = std.fs.File.stdout().writer(&stdout_buf);
+    const stdout = &stdout_file.interface;
+    defer stdout.flush() catch {};
 
     var stderr_buf: [128]u8 = undefined;
-    var stderr = std.fs.File.stdout().writer(&stderr_buf).interface;
+    var stderr_file = std.fs.File.stdout().writer(&stderr_buf);
+    const stderr = &stderr_file.interface;
+    defer stderr.flush() catch {};
 
     if (args.len < 2) {
         try stdout.writeAll(usage);
@@ -100,8 +104,8 @@ pub fn main() !void {
         .cwd = cwd,
         .zig_exe = env_map.get("ZIG") orelse "zig",
         .env_map = env_map,
-        .stdout = &stdout,
-        .stderr = &stderr,
+        .stdout = stdout,
+        .stderr = stderr,
     };
     for (args[1..]) |arg| {
         if (std.mem.eql(u8, arg, "--debug")) opt.debug_level += 1;
@@ -386,9 +390,11 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
-    try std.json.stringify(b.parsed, .{
-        .emit_null_optional_fields = false,
-    }, opt.stdout);
+    try opt.stdout.print("{f}", .{
+        std.json.fmt(b.parsed, .{
+            .emit_null_optional_fields = false,
+        }),
+    });
 }
 
 pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
@@ -439,7 +445,13 @@ pub fn SerializedZonType(T: type) type {
     };
 }
 
-pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8, T: type) !SerializedZonType(T) {
+pub fn runZonStdoutCommand(
+    opt: GlobalOptions,
+    runner: []const u8,
+    root: []const u8,
+    args: []const []const u8,
+    T: type,
+) !SerializedZonType(T) {
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
@@ -457,7 +469,12 @@ pub fn runZonStdoutCommand(opt: GlobalOptions, runner: []const u8, root: []const
         .env_map = &opt.env_map,
         .expand_arg0 = .expand,
     }) catch |err| {
-        std.log.err("Subprocess error: {}\nArgv: {}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
+        std.log.err("Subprocess error: {}\nArgv: {f}", .{
+            err,
+            std.json.fmt(argv.items, .{
+                .whitespace = .minified,
+            }),
+        });
         switch (err) {
             error.FileNotFound => {
                 std.log.err("Executable not found: {s}", .{argv.items[0]});
@@ -512,7 +529,7 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
     proc.expand_arg0 = .expand;
 
     const term = proc.spawnAndWait() catch |err| {
-        std.log.err("Subprocess error: {}\nArgv: {}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
+        std.log.err("Subprocess error: {}\nArgv: {f}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
         switch (err) {
             error.FileNotFound => {
                 std.log.err("Executable not found: {s}", .{argv.items[0]});
