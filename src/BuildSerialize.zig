@@ -45,14 +45,14 @@ pub fn serializeBuild(b: *std.Build, opt: std.zon.stringify.SerializeOptions) ![
     var serialized: Serialized = try Serialized.init(b);
     defer serialized.deinit(b);
 
-    var output: std.ArrayListUnmanaged(u8) = .empty;
+    var output = std.io.Writer.Allocating.init(b.allocator);
     std.zon.stringify.serialize(
         serialized,
         opt,
-        output.writer(b.allocator),
+        &output.writer,
     ) catch @panic("OOM");
-    try output.writer(b.allocator).writeAll("\n");
-    return output.toOwnedSlice(b.allocator);
+    try output.writer.writeAll("\n");
+    return output.toOwnedSlice();
 }
 
 pub fn init(b: *std.Build) anyerror!@This() {
