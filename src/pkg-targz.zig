@@ -196,7 +196,7 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
+    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.history_len);
     defer opt.gpa.free(compress_buf);
     var compress = std.compress.flate.Compress.init(
         &output.interface,
@@ -213,9 +213,8 @@ pub fn process(opt: Options) !void {
     };
     defer archive.underlying_writer.flush() catch @panic("archive finish error");
 
-    var zon_src: std.ArrayListUnmanaged(u8) = .empty;
-    defer zon_src.deinit(opt.gpa);
-    var zon_src_writer = std.io.Writer.Allocating.fromArrayList(opt.gpa, &zon_src);
+    var zon_src: std.io.Writer.Allocating = .init(opt.gpa);
+    defer zon_src.deinit();
 
     for (opt.fs_paths, 0..) |fs_path, i| {
         const archive_path = opt.tar_paths[i];
@@ -242,19 +241,23 @@ pub fn process(opt: Options) !void {
         var manifest: ?Manifest = null;
 
         if (zon_file) |zf| {
-            defer zf.close();
-            zon_src.clearRetainingCapacity();
-            var zfb: [32]u8 = undefined;
-            var zfw: std.fs.File.Reader = zf.reader(&zfb);
-            _ = try zfw.interface.stream(&zon_src_writer.writer, .unlimited);
-            try zon_src_writer.writer.writeByte(0);
+            const zon_sliceZ: [:0]u8 = blk: {
+                defer zf.close();
+                zon_src.clearRetainingCapacity();
+                var zfb: [8192]u8 = undefined;
+                var zfr: std.fs.File.Reader = zf.reader(&zfb);
+                _ = try zfr.interface.stream(&zon_src.writer, .unlimited);
+                try zon_src.writer.writeByte(0);
+                const zon_slice = zon_src.getWritten();
+                break :blk @ptrCast(zon_slice[0..if (zon_slice.len == 0) 0 else zon_slice.len - 1]);
+            };
 
             var zonDiag: Manifest.ZonDiag = .{};
             defer zonDiag.deinit(opt.gpa);
 
             manifest = Manifest.fromSlice(
                 opt.gpa,
-                @ptrCast(zon_src.items[0 .. zon_src.items.len - 1]),
+                zon_sliceZ,
                 &zonDiag,
             ) catch |e| {
                 Manifest.log(std.log.err, e, fs_path, zonDiag);
@@ -333,10 +336,14 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
             var buf: [64]u8 = undefined;
             const stat = try std.fs.cwd().statFile(entry.path);
             var reader = file.reader(&buf);
-            try arc.writeFile(
+            try arc.writeFileStream(
                 entry.path,
-                &reader,
-                stat.mtime,
+                try reader.getSize(),
+                &reader.interface,
+                .{
+                    .mode = @intCast(stat.mode),
+                    .mtime = @intCast(stat.mtime),
+                },
             );
         },
         else => return,

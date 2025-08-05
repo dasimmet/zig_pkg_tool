@@ -137,7 +137,7 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
 
 pub const DepPackageOptions = struct {
     name: []const u8,
-    opt: std.builtin.OptimizeMode = .ReleaseFast,
+    opt: std.builtin.OptimizeMode = .Debug,
 };
 
 pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
