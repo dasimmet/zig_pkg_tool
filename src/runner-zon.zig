@@ -13,11 +13,14 @@ pub fn main() !void {
 pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) !void {
     _ = ctx;
     _ = targets;
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buf: [8192]u8 = undefined;
+    const stdout = std.fs.File.stdout();
+    var stdout_w = stdout.writer(&stdout_buf);
 
     const bs = try Serialize.serializeBuild(b, .{
         .whitespace = false,
         .emit_default_optional_fields = false,
     });
-    try stdout.writeAll(bs);
+    try stdout_w.interface.writeAll(bs);
+    try stdout_w.interface.flush();
 }
