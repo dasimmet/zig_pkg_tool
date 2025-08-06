@@ -253,6 +253,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
         Serialize.align_one,
         0,
     );
+    defer opt.gpa.free(zon_src);
 
     const output = try std.fs.path.resolve(
         opt.gpa,
