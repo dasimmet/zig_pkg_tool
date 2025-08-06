@@ -196,22 +196,35 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.history_len);
+    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
     defer opt.gpa.free(compress_buf);
-    var compress = std.compress.flate.Compress.init(
+
+    var compress_thread = std.process.Child.init(&.{ "gzip", "-c", "-9", "-" }, opt.gpa);
+    compress_thread.stdin_behavior = .Pipe;
+    compress_thread.stdout_behavior = .Pipe;
+    try compress_thread.spawn();
+
+    var compress_in = compress_thread.stdin.?.writer(compress_buf);
+    var compress_out = compress_thread.stdout.?.reader(&.{});
+    const copy_thread = try std.Thread.spawn(.{}, streamThread, .{
+        &compress_out.interface,
         &output.interface,
-        compress_buf,
-        .{
-            .container = .gzip,
-            .level = .best,
-        },
-    );
-    defer compress.end() catch @panic("compless flush error");
+    });
+
+    // var compress = std.compress.flate.Compress.init(
+    //     &output.interface,
+    //     compress_buf,
+    //     .{
+    //         .container = .gzip,
+    //         .level = .best,
+    //     },
+    // );
+    // defer compress.end() catch @panic("compless flush error");
 
     var archive = std.tar.Writer{
-        .underlying_writer = &compress.writer,
+        .underlying_writer = &compress_in.interface,
     };
-    defer archive.underlying_writer.flush() catch @panic("archive finish error");
+    // defer archive.underlying_writer.flush() catch @panic("archive finish error");
 
     var zon_src: std.io.Writer.Allocating = .init(opt.gpa);
     defer zon_src.deinit();
@@ -319,11 +332,18 @@ pub fn process(opt: Options) !void {
             try writeTarEntry(&archive, &arc_entry);
         }
     }
+
+    try compress_in.interface.flush();
+    compress_in.file.close();
+    compress_thread.stdin = null;
+    copy_thread.join();
+    _ = try compress_thread.wait();
+    try output.interface.flush();
 }
 
 pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !void {
-    const file = std.fs.cwd().openFile(
-        entry.path,
+    const file = entry.dir.openFile(
+        entry.basename,
         .{},
     ) catch |e| switch (e) {
         error.IsDir => return,
@@ -334,18 +354,27 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
     switch (entry.kind) {
         .file => {
             var buf: [64]u8 = undefined;
-            const stat = try std.fs.cwd().statFile(entry.path);
+            const stat = try entry.dir.statFile(entry.basename);
             var reader = file.reader(&buf);
             try arc.writeFileStream(
                 entry.path,
                 try reader.getSize(),
                 &reader.interface,
                 .{
-                    .mode = @intCast(stat.mode),
-                    .mtime = @intCast(stat.mtime),
+                    .mode = 0,
+                    .mtime = @intCast(@divFloor(stat.mtime, std.time.ns_per_s)),
                 },
             );
         },
         else => return,
     }
+}
+
+pub fn streamThread(reader: *std.Io.Reader, writer: *std.Io.Writer) !void {
+    _ = reader.streamRemaining(writer) catch |e| {
+        switch (e) {
+            error.ReadFailed => {},
+            else => return e,
+        }
+    };
 }
