@@ -127,6 +127,13 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
             .optimize = opt,
         }),
     });
+
+    const zlib_dep = b.dependency("zlib", .{
+        .target = target,
+        .optimize = opt,
+    });
+    zigpkg.linkLibrary(zlib_dep.artifact("z"));
+
     if (target.result.os.tag == .windows) {
         zigpkg.linkLibC();
     }

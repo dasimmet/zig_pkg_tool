@@ -1,8 +1,11 @@
 const std = @import("std");
+const Io = std.Io;
 const builtin = @import("builtin");
 const Manifest = @import("Manifest.zig");
 const tar = std.tar;
-const gzip = std.compress.gzip;
+const zlib = @cImport({
+    @cInclude("zlib.h");
+});
 
 pub const default_ignores: []const []const u8 = &.{
     "zig-cache/",
@@ -196,35 +199,17 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    const compress_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
+    const compress_buf = try opt.gpa.alloc(u8, ZLibDeflater.CHUNKSIZE);
     defer opt.gpa.free(compress_buf);
 
-    var compress_thread = std.process.Child.init(&.{ "gzip", "-c", "-9", "-" }, opt.gpa);
-    compress_thread.stdin_behavior = .Pipe;
-    compress_thread.stdout_behavior = .Pipe;
-    try compress_thread.spawn();
-
-    var compress_in = compress_thread.stdin.?.writer(compress_buf);
-    var compress_out = compress_thread.stdout.?.reader(&.{});
-    const copy_thread = try std.Thread.spawn(.{}, streamThread, .{
-        &compress_out.interface,
-        &output.interface,
+    var compressor: ZLibDeflater = try .init(.{
+        .buffer = compress_buf,
+        .writer = &output.interface,
     });
 
-    // var compress = std.compress.flate.Compress.init(
-    //     &output.interface,
-    //     compress_buf,
-    //     .{
-    //         .container = .gzip,
-    //         .level = .best,
-    //     },
-    // );
-    // defer compress.end() catch @panic("compless flush error");
-
     var archive = std.tar.Writer{
-        .underlying_writer = &compress_in.interface,
+        .underlying_writer = &compressor.writer,
     };
-    // defer archive.underlying_writer.flush() catch @panic("archive finish error");
 
     var zon_src: std.io.Writer.Allocating = .init(opt.gpa);
     defer zon_src.deinit();
@@ -332,13 +317,18 @@ pub fn process(opt: Options) !void {
             try writeTarEntry(&archive, &arc_entry);
         }
     }
+}
 
-    try compress_in.interface.flush();
-    compress_in.file.close();
-    compress_thread.stdin = null;
-    copy_thread.join();
-    _ = try compress_thread.wait();
-    try output.interface.flush();
+fn zLibError(ret: c_int) !void {
+    return switch (ret) {
+        zlib.Z_OK => {},
+        zlib.Z_STREAM_ERROR => error.ZLibSteam,
+        zlib.Z_DATA_ERROR => error.ZLibData,
+        zlib.Z_MEM_ERROR => error.ZLibMem,
+        zlib.Z_BUF_ERROR => error.ZLibBuf,
+        zlib.Z_VERSION_ERROR => error.ZLibVersion,
+        else => error.ZLibUnknown,
+    };
 }
 
 pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !void {
@@ -370,7 +360,95 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
     }
 }
 
-pub fn streamThread(reader: *std.Io.Reader, writer: *std.Io.Writer) !void {
+const ZLibDeflater = struct {
+    const Self = @This();
+    const CHUNKSIZE = 16384;
+    zstream: zlib.z_stream,
+    underlying_writer: *std.io.Writer,
+    writer: std.io.Writer,
+
+    pub const Options = struct {
+        chunksize: usize = CHUNKSIZE,
+        buffer: []u8,
+        level: u4 = 9,
+        writer: *std.io.Writer,
+    };
+
+    pub fn init(opt: Self.Options) !Self {
+        std.debug.assert(opt.buffer.len >= opt.chunksize);
+        var self: @This() = .{
+            .zstream = .{
+                // .zalloc = null,
+                // .zfree = null,
+                // .@"opaque" = zlib.Z_NULL,
+                // .avail_in = z_in.len,
+                // .next_in = &z_in,
+                // .avail_out = z_out.len,
+                // .next_out = &z_out,
+            },
+            .writer = .{
+                .buffer = opt.buffer,
+                .vtable = &.{
+                    .drain = drain,
+                },
+            },
+            .underlying_writer = opt.writer,
+        };
+        try zLibError(zlib.deflateInit2(
+            &self.zstream,
+            opt.level,
+            zlib.Z_DEFLATED,
+            15,
+            9,
+            zlib.Z_DEFAULT_STRATEGY,
+        ));
+        return self;
+    }
+
+    fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFailed}!usize {
+        _ = splat;
+        const self: *Self = @fieldParentPtr("writer", wr);
+        for (blobs) |blob| {
+            self.zstream.next_in = blob;
+            self.zstream.avail_in = blob.len;
+            self.zstream.next_out = wr.buffer;
+            self.zstream.avail_out = wr.buffer.len;
+            while (true) {
+                zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
+                    error.ZLibBuf => continue,
+                    {} => {},
+                    else => {
+                        std.log.err("zlib error: {}", .{err});
+                        return error.WriteFailed;
+                    },
+                };
+                const have = wr.buffer.len - self.zstream.avail_out;
+                try wr.writeAll(self.zstream.next_out[0..have]);
+                break;
+            }
+        }
+    }
+
+    // if (archive_writer.end == 0) continue;
+    // zs.avail_out = z_out.len;
+    // zs.next_out = &z_out;
+    // zs.avail_in = @intCast(archive_writer.end);
+    // zs.next_in = &z_in;
+    // zLibError(zlib.deflate(&zs, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
+    //     error.ZLibBuf => {},
+    //     else => return err,
+    // };
+    // _ = archive_writer.consumeAll();
+    // const have = z_chunk - zs.avail_out;
+    // _ = try output.interface.write(zs.next_out[0..have]);
+
+    // try zLibError(zlib.deflate(&zs, zlib.Z_FINISH));
+    // try zLibError(zlib.deflateEnd(&zs));
+    // const have = z_chunk - zs.avail_out;
+    // _ = try output.interface.write(zs.next_out[0..have]);
+};
+
+pub fn streamThread(reader: *Io.Reader, writer: *Io.Writer) !void {
     _ = reader.streamRemaining(writer) catch |e| {
         switch (e) {
             error.ReadFailed => {},
