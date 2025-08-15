@@ -125,7 +125,7 @@ fn sendFile(
     try self.zdrain(wr.buffer[0..wr.end]);
     wr.end = 0;
     var transferred: usize = 0;
-    while (transferred < @intFromEnum(limit)) {
+    while (limit == .unlimited or transferred < @intFromEnum(limit)) {
         const to_read = @min(wr.buffer.len, @intFromEnum(limit) - transferred);
         const just_read = try file_reader.readStreaming(wr.buffer[0..to_read]);
         transferred += just_read;
