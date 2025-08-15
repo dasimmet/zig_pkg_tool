@@ -75,42 +75,34 @@ fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFai
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
+    try self.zdrain(wr.buffer[0..wr.end]);
     wr.end = 0;
 
     var count: usize = 0;
     for (blobs, 1..) |blob, i| {
         var splat_i: usize = 0;
         while ((i != blobs.len and splat_i < 1) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
-            try self.zdrain(blob, zlib.Z_NO_FLUSH);
+            try self.zdrain(blob);
             count += blob.len;
         }
     }
     return count;
 }
 
-fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
-    if (blob.len == 0 and flush_flag != zlib.Z_FULL_FLUSH) return;
+fn zdrain(self: *Self, blob: []const u8) !void {
+    if (blob.len == 0) return;
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
     while (self.zstream.avail_in > 0) {
         self.zstream.next_out = self.outbuf.ptr;
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
-        zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| switch (err) {
-            error.ZLibBuf => {
-                std.log.err("ZLibBuf!!!\nzstream:\n{any}", .{self.zstream});
-                std.log.err("zlib error: {}", .{err});
-                return error.WriteFailed;
-            },
-            else => {
-                std.log.err("zstream:\n{any}", .{self.zstream});
-                std.log.err("zlib error: {}\n", .{err});
-                return error.WriteFailed;
-            },
+        zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| {
+            std.log.err("zstream:\n{any}", .{self.zstream});
+            std.log.err("zlib error: {}\n", .{err});
+            return error.WriteFailed;
         };
         const have = self.outbuf.len - self.zstream.avail_out;
-        std.log.err("have: {d}", .{have});
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
 }
@@ -130,14 +122,14 @@ fn sendFile(
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
+    try self.zdrain(wr.buffer[0..wr.end]);
     wr.end = 0;
     var transferred: usize = 0;
     while (transferred < @intFromEnum(limit)) {
         const to_read = @min(wr.buffer.len, @intFromEnum(limit) - transferred);
         const just_read = try file_reader.readStreaming(wr.buffer[0..to_read]);
         transferred += just_read;
-        try self.zdrain(wr.buffer[0..just_read], zlib.Z_NO_FLUSH);
+        try self.zdrain(wr.buffer[0..just_read]);
         if (file_reader.atEnd()) break;
     }
     return transferred;
@@ -151,7 +143,26 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_FULL_FLUSH);
+    self.zstream.next_in = wr.buffer.ptr;
+    self.zstream.avail_in = @intCast(wr.buffer.len);
+
+    var end: bool = false;
+    while (!end) {
+        self.zstream.next_out = self.outbuf.ptr;
+        self.zstream.avail_out = @intCast(self.outbuf.len);
+        zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
+            error.ZLibStreamEnd => {
+                end = true;
+            },
+            else => {
+                std.log.err("zstream:\n{any}", .{self.zstream});
+                std.log.err("zlib error: {}\n", .{err});
+                return error.WriteFailed;
+            },
+        };
+        const have = self.outbuf.len - self.zstream.avail_out;
+        try self.underlying_writer.writeAll(self.outbuf[0..have]);
+    }
     wr.end = 0;
     try self.underlying_writer.flush();
 }
@@ -159,9 +170,9 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
 fn zLibError(ret: c_int) !void {
     return switch (ret) {
         zlib.Z_OK => {},
+        zlib.Z_STREAM_END => error.ZLibStreamEnd,
         zlib.Z_STREAM_ERROR => error.ZLibStream,
         zlib.Z_DATA_ERROR => error.ZLibData,
-        zlib.Z_NEED_DICT => error.ZLibNeedDict,
         zlib.Z_MEM_ERROR => error.ZLibMem,
         zlib.Z_BUF_ERROR => error.ZLibBuf,
         zlib.Z_VERSION_ERROR => error.ZLibVersion,

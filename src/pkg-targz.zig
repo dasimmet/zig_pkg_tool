@@ -316,6 +316,7 @@ pub fn process(opt: Options) !void {
             try writeTarEntry(&archive, &arc_entry);
         }
     }
+    try archive.finishPedantically();
     try compressor.writer.flush();
     try output.interface.flush();
 }
