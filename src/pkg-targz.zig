@@ -379,12 +379,13 @@ const ZLibDeflater = struct {
     pub fn init(opt: Self.Options) !Self {
         var self: @This() = .{
             .zstream = .{
-                .zalloc = null,
-                .zfree = null,
-                .@"opaque" = null,
-                .avail_out = 0,
-                .avail_in = 0,
+                // .zalloc = null,
+                // .zfree = null,
+                // .@"opaque" = null,
                 .next_in = zlib.Z_NULL,
+                .avail_in = 0,
+                .next_out = zlib.Z_NULL,
+                .avail_out = 0,
             },
             .outbuf = try opt.gpa.alloc(u8, CHUNKSIZE),
             .writer = .{
@@ -400,8 +401,8 @@ const ZLibDeflater = struct {
             &self.zstream,
             opt.level,
             zlib.Z_DEFLATED,
-            15,
-            9,
+            zlib.MAX_WBITS,
+            zlib.MAX_MEM_LEVEL,
             zlib.Z_DEFAULT_STRATEGY,
         ));
         return self;
@@ -436,15 +437,19 @@ const ZLibDeflater = struct {
             self.zstream.next_out = self.outbuf.ptr;
             self.zstream.avail_out = @intCast(self.outbuf.len);
 
-            std.log.err("zstream: {d} {any}", .{ self.writer.end, self.zstream });
+            std.log.err("zstream pre deflate: {d}\n{any}", .{
+                self.writer.end,
+                self.zstream,
+            });
+
             zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
                 error.ZLibBuf => {
-                    std.log.err("zstream: {any}", .{self.zstream});
+                    std.log.err("ZLibBuf!!!\nzstream:\n{any}", .{self.zstream});
                     std.log.err("zlib error: {}", .{err});
                     return;
                 },
                 else => {
-                    std.log.err("zstream: {any}", .{self.zstream});
+                    std.log.err("zstream:\n{any}", .{self.zstream});
                     std.log.err("zlib error: {}\n", .{err});
                     return error.WriteFailed;
                 },
