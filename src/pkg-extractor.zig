@@ -133,8 +133,9 @@ pub fn process(opt: Options) !void {
     }
     {
         var fetch_err: ?anyerror = null;
-        var err_buf: std.ArrayList(u8) = .init(opt.gpa);
-        defer err_buf.deinit();
+        var err_buf: std.ArrayList(u8) = .empty;
+        defer err_buf.deinit(opt.gpa);
+        const err_writer = err_buf.writer(opt.gpa);
 
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
@@ -151,7 +152,7 @@ pub fn process(opt: Options) !void {
                 opt.gpa.free(res.stdout);
             }
             if (res.term != .Exited or res.term.Exited != 0) {
-                try err_buf.writer().print("zig fetch {s}\n{s}\n{s}\n", .{
+                try err_writer.print("zig fetch {s}\n{s}\n{s}\n", .{
                     a.tf.abs_path,
                     res.stdout,
                     res.stderr,
@@ -159,7 +160,7 @@ pub fn process(opt: Options) !void {
                 fetch_err = error.ZigFetch;
             }
             if (!std.mem.startsWith(u8, res.stdout, a.hash)) {
-                try err_buf.writer().print("hash mismatch: {s}\nexpected:\"{s}\"\n  actual:\"{s}\"\n", .{
+                try err_writer.print("hash mismatch: {s}\nexpected:\"{s}\"\n  actual:\"{s}\"\n", .{
                     a.tf.abs_path,
                     a.hash,
                     res.stdout[0..@min(res.stdout.len, a.hash.len)],

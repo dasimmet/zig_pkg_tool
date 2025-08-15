@@ -113,13 +113,15 @@ pub fn fromBuild(
     root: []const u8,
     out_path: []const u8,
 ) !void {
-    var tar_paths = std.ArrayList([]const u8).init(gpa);
+    var tar_paths_array = std.ArrayList([]const u8).empty;
+    var tar_paths = tar_paths_array.toManaged(gpa);
     defer {
         for (tar_paths.items) |it| gpa.free(it);
         tar_paths.deinit();
     }
 
-    var fs_paths = std.ArrayList([]const u8).init(gpa);
+    var fs_paths_array = std.ArrayList([]const u8).empty;
+    var fs_paths = fs_paths_array.toManaged(gpa);
     defer {
         for (fs_paths.items) |it| gpa.free(it);
         fs_paths.deinit();
@@ -244,7 +246,7 @@ pub fn process(opt: Options) !void {
                 var zfr: std.fs.File.Reader = zf.reader(&zfb);
                 _ = try zfr.interface.stream(&zon_src.writer, .unlimited);
                 try zon_src.writer.writeByte(0);
-                const zon_slice = zon_src.getWritten();
+                const zon_slice = zon_src.written();
                 break :blk @ptrCast(zon_slice[0..if (zon_slice.len == 0) 0 else zon_slice.len - 1]);
             };
 

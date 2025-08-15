@@ -456,12 +456,12 @@ pub fn runZonStdoutCommand(
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
-    var argv = std.ArrayList([]const u8).init(opt.gpa);
-    defer argv.deinit();
-    try argv.appendSlice(&.{
+    var argv = std.ArrayList([]const u8).empty;
+    defer argv.deinit(opt.gpa);
+    try argv.appendSlice(opt.gpa, &.{
         opt.zig_exe, "build", "--build-runner", buildrunner.runner,
     });
-    try argv.appendSlice(args);
+    try argv.appendSlice(opt.gpa, args);
 
     const term = std.process.Child.run(.{
         .argv = argv.items,
@@ -514,12 +514,12 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
     defer buildrunner.deinit(opt.gpa);
 
-    var argv = std.ArrayList([]const u8).init(opt.gpa);
-    defer argv.deinit();
-    try argv.appendSlice(&.{
+    var argv = std.ArrayList([]const u8).empty;
+    defer argv.deinit(opt.gpa);
+    try argv.appendSlice(opt.gpa, &.{
         opt.zig_exe, "build", "--build-runner", buildrunner.runner,
     });
-    try argv.appendSlice(args);
+    try argv.appendSlice(opt.gpa, args);
 
     var proc = std.process.Child.init(argv.items, opt.gpa);
     proc.stdin_behavior = .Inherit;
