@@ -372,7 +372,7 @@ const ZLibDeflater = struct {
 
     pub const Options = struct {
         gpa: std.mem.Allocator,
-        level: u4 = 9,
+        level: u4 = 6,
         writer: *std.io.Writer,
     };
 

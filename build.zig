@@ -14,7 +14,10 @@ pub fn build(b: *std.Build) void {
     const opt = b.standardOptimizeOption(.{});
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
-    const depPkgArc = depPackagesInternal(b, b, .{ .name = "depkg" });
+    const depPkgArc = depPackagesInternal(b, b, .{
+        .name = "depkg",
+        .opt = .Debug,
+    });
     const depPkgInstall = b.addInstallFile(
         depPkgArc,
         "deppkg/deppkg.tar.gz",
@@ -144,7 +147,7 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
 
 pub const DepPackageOptions = struct {
     name: []const u8,
-    opt: std.builtin.OptimizeMode = .Debug,
+    opt: std.builtin.OptimizeMode = .ReleaseSafe,
 };
 
 pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
