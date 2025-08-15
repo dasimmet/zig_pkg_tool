@@ -7,35 +7,34 @@ const zlib = @cImport({
 });
 
 const CHUNKSIZE = 16 * 1024;
-zstream_initialized: bool = false,
+
+zstream_initialized: bool,
 level: u4,
 zstream: zlib.z_stream,
-outbuf: []u8,
+outbuf: [CHUNKSIZE]u8,
+inbuf: [CHUNKSIZE]u8,
 underlying_writer: *std.io.Writer,
 writer: std.io.Writer,
-gpa: std.mem.Allocator,
 
 pub const Options = struct {
-    gpa: std.mem.Allocator,
     level: u4 = 9,
     writer: *std.io.Writer,
 };
 
 pub fn init(opt: Self.Options) !Self {
-    return .{
+    var self: Self = .{
+        .zstream_initialized = false,
+        .level = opt.level,
         .zstream = .{
-            // .zalloc = null,
-            // .zfree = null,
-            // .@"opaque" = null,
             .next_in = zlib.Z_NULL,
             .avail_in = 0,
             .next_out = zlib.Z_NULL,
             .avail_out = 0,
         },
-        .level = opt.level,
-        .outbuf = try opt.gpa.alloc(u8, CHUNKSIZE),
+        .outbuf = undefined,
+        .inbuf = undefined,
         .writer = .{
-            .buffer = try opt.gpa.alloc(u8, CHUNKSIZE),
+            .buffer = undefined,
             .vtable = &.{
                 .drain = drain,
                 .flush = flush,
@@ -43,14 +42,13 @@ pub fn init(opt: Self.Options) !Self {
             },
         },
         .underlying_writer = opt.writer,
-        .gpa = opt.gpa,
     };
+    self.writer.buffer = &self.inbuf;
+    return self;
 }
 
 pub fn deinit(self: *Self) void {
     _ = zlib.deflateEnd(&self.zstream);
-    self.gpa.free(self.writer.buffer);
-    self.gpa.free(self.outbuf);
 }
 
 inline fn zStreamInit(self: *@This()) !void {
@@ -94,7 +92,7 @@ fn zdrain(self: *Self, blob: []const u8) !void {
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
     while (self.zstream.avail_in > 0) {
-        self.zstream.next_out = self.outbuf.ptr;
+        self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
         zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| {
@@ -110,9 +108,6 @@ fn zdrain(self: *Self, blob: []const u8) !void {
 fn sendFile(
     wr: *Io.Writer,
     file_reader: *std.fs.File.Reader,
-    /// Maximum amount of bytes to read from the file. Implementations may
-    /// assume that the file size does not exceed this amount. Data from
-    /// `buffer` does not count towards this limit.
     limit: Io.Limit,
 ) Io.Writer.FileError!usize {
     const self: *Self = @fieldParentPtr("writer", wr);
@@ -148,7 +143,7 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
 
     var end: bool = false;
     while (!end) {
-        self.zstream.next_out = self.outbuf.ptr;
+        self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
         zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
             error.ZLibStreamEnd => {

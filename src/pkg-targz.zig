@@ -200,7 +200,6 @@ pub fn process(opt: Options) !void {
     var output = out_file.writer(&out_buf);
 
     var compressor: ZLibDeflater = try .init(.{
-        .gpa = opt.gpa,
         .writer = &output.interface,
     });
     defer compressor.deinit();
