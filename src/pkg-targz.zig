@@ -364,6 +364,8 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
 const ZLibDeflater = struct {
     const Self = @This();
     const CHUNKSIZE = 16 * 1024;
+    zstream_initialized: bool = false,
+    level: u4,
     zstream: zlib.z_stream,
     outbuf: []u8,
     underlying_writer: *std.io.Writer,
@@ -377,8 +379,7 @@ const ZLibDeflater = struct {
     };
 
     pub fn init(opt: Self.Options) !Self {
-        @breakpoint();
-        var self: @This() = .{
+        return .{
             .zstream = .{
                 // .zalloc = null,
                 // .zfree = null,
@@ -388,25 +389,19 @@ const ZLibDeflater = struct {
                 .next_out = zlib.Z_NULL,
                 .avail_out = 0,
             },
+            .level = opt.level,
             .outbuf = try opt.gpa.alloc(u8, CHUNKSIZE),
             .writer = .{
                 .buffer = try opt.gpa.alloc(u8, CHUNKSIZE),
                 .vtable = &.{
                     .drain = drain,
+                    .flush = flush,
+                    .sendFile = sendFile,
                 },
             },
             .underlying_writer = opt.writer,
             .gpa = opt.gpa,
         };
-        try zLibError(zlib.deflateInit2(
-            &self.zstream,
-            opt.level,
-            zlib.Z_DEFLATED,
-            zlib.MAX_WBITS,
-            zlib.MAX_MEM_LEVEL,
-            zlib.Z_DEFAULT_STRATEGY,
-        ));
-        return self;
     }
 
     pub fn deinit(self: Self) void {
@@ -414,24 +409,75 @@ const ZLibDeflater = struct {
         self.gpa.free(self.outbuf);
     }
 
+    inline fn zLibInit(self: *@This()) !void {
+        if (!self.zstream_initialized) {
+            try zLibError(zlib.deflateInit2(
+                &self.zstream,
+                self.level,
+                zlib.Z_DEFLATED,
+                zlib.MAX_WBITS,
+                zlib.MAX_MEM_LEVEL,
+                zlib.Z_DEFAULT_STRATEGY,
+            ));
+            self.zstream_initialized = true;
+        }
+    }
+
+    fn sendFile(
+        wr: *Io.Writer,
+        file_reader: *std.fs.File.Reader,
+        /// Maximum amount of bytes to read from the file. Implementations may
+        /// assume that the file size does not exceed this amount. Data from
+        /// `buffer` does not count towards this limit.
+        limit: Io.Limit,
+    ) Io.Writer.FileError!usize {
+        const self: *Self = @fieldParentPtr("writer", wr);
+        try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
+        wr.end = 0;
+        const buf = self.gpa.alloc(u8, @intFromEnum(limit)) catch return error.ReadFailed;
+        const count = try file_reader.readStreaming(buf);
+        std.debug.assert(buf.len == count);
+        try self.zdrain(buf, zlib.Z_NO_FLUSH);
+        return count;
+    }
+
+    fn flush(wr: *Io.Writer) Io.Writer.Error!void {
+        const self: *Self = @fieldParentPtr("writer", wr);
+        self.zLibInit() catch |err| {
+            std.log.err("zstream:\n{any}", .{self.zstream});
+            std.log.err("zlib error: {}\n", .{err});
+            return error.WriteFailed;
+        };
+
+        try self.zdrain(wr.buffer[0..wr.end], zlib.Z_FULL_FLUSH);
+        wr.end = 0;
+        try self.underlying_writer.flush();
+    }
+
     fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFailed}!usize {
         const self: *Self = @fieldParentPtr("writer", wr);
+        self.zLibInit() catch |err| {
+            std.log.err("zstream:\n{any}", .{self.zstream});
+            std.log.err("zlib error: {}\n", .{err});
+            return error.WriteFailed;
+        };
         var count: usize = 0;
 
-        try self.zdrain(wr.buffer[0..wr.end]);
+        try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
         count += wr.end;
         wr.end = 0;
         for (blobs, 1..) |blob, i| {
             var splat_i: usize = 0;
             while ((i != blobs.len and splat_i < 1) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
-                try self.zdrain(blob);
+                try self.zdrain(blob, zlib.Z_NO_FLUSH);
                 count += blob.len;
             }
         }
         return count;
     }
 
-    fn zdrain(self: *Self, blob: []const u8) !void {
+    fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
+        if (blob.len == 0) return;
         self.zstream.next_in = @constCast(blob.ptr);
         self.zstream.avail_in = @intCast(blob.len);
         while (self.zstream.avail_in > 0) {
@@ -443,11 +489,11 @@ const ZLibDeflater = struct {
                 self.zstream,
             });
 
-            zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
+            zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| switch (err) {
                 error.ZLibBuf => {
                     std.log.err("ZLibBuf!!!\nzstream:\n{any}", .{self.zstream});
                     std.log.err("zlib error: {}", .{err});
-                    return;
+                    return error.WriteFailed;
                 },
                 else => {
                     std.log.err("zstream:\n{any}", .{self.zstream});
@@ -460,31 +506,4 @@ const ZLibDeflater = struct {
             try self.underlying_writer.writeAll(self.zstream.next_out[0..have]);
         }
     }
-
-    // if (archive_writer.end == 0) continue;
-    // zs.avail_out = z_out.len;
-    // zs.next_out = &z_out;
-    // zs.avail_in = @intCast(archive_writer.end);
-    // zs.next_in = &z_in;
-    // zLibError(zlib.deflate(&zs, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
-    //     error.ZLibBuf => {},
-    //     else => return err,
-    // };
-    // _ = archive_writer.consumeAll();
-    // const have = z_chunk - zs.avail_out;
-    // _ = try output.interface.write(zs.next_out[0..have]);
-
-    // try zLibError(zlib.deflate(&zs, zlib.Z_FINISH));
-    // try zLibError(zlib.deflateEnd(&zs));
-    // const have = z_chunk - zs.avail_out;
-    // _ = try output.interface.write(zs.next_out[0..have]);
 };
-
-pub fn streamThread(reader: *Io.Reader, writer: *Io.Writer) !void {
-    _ = reader.streamRemaining(writer) catch |e| {
-        switch (e) {
-            error.ReadFailed => {},
-            else => return e,
-        }
-    };
-}

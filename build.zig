@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
 
     const zigpkg = build_zigpkg(b, target, opt);
     b.installArtifact(zigpkg);
+    b.step("exe", "").dependOn(&b.addInstallArtifact(zigpkg, .{}).step);
 
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigRunEnv(b, zigpkg_run);
