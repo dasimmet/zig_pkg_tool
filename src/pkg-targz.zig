@@ -199,13 +199,11 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    const compress_buf = try opt.gpa.alloc(u8, ZLibDeflater.CHUNKSIZE);
-    defer opt.gpa.free(compress_buf);
-
     var compressor: ZLibDeflater = try .init(.{
-        .buffer = compress_buf,
+        .gpa = opt.gpa,
         .writer = &output.interface,
     });
+    defer compressor.deinit();
 
     var archive = std.tar.Writer{
         .underlying_writer = &compressor.writer,
@@ -322,8 +320,9 @@ pub fn process(opt: Options) !void {
 fn zLibError(ret: c_int) !void {
     return switch (ret) {
         zlib.Z_OK => {},
-        zlib.Z_STREAM_ERROR => error.ZLibSteam,
+        zlib.Z_STREAM_ERROR => error.ZLibStream,
         zlib.Z_DATA_ERROR => error.ZLibData,
+        zlib.Z_NEED_DICT => error.ZLibNeedDict,
         zlib.Z_MEM_ERROR => error.ZLibMem,
         zlib.Z_BUF_ERROR => error.ZLibBuf,
         zlib.Z_VERSION_ERROR => error.ZLibVersion,
@@ -362,37 +361,38 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
 
 const ZLibDeflater = struct {
     const Self = @This();
-    const CHUNKSIZE = 16384;
+    const CHUNKSIZE = 16 * 1024;
     zstream: zlib.z_stream,
+    outbuf: []u8,
     underlying_writer: *std.io.Writer,
     writer: std.io.Writer,
+    gpa: std.mem.Allocator,
 
     pub const Options = struct {
-        chunksize: usize = CHUNKSIZE,
-        buffer: []u8,
+        gpa: std.mem.Allocator,
         level: u4 = 9,
         writer: *std.io.Writer,
     };
 
     pub fn init(opt: Self.Options) !Self {
-        std.debug.assert(opt.buffer.len >= opt.chunksize);
         var self: @This() = .{
             .zstream = .{
-                // .zalloc = null,
-                // .zfree = null,
-                // .@"opaque" = zlib.Z_NULL,
-                // .avail_in = z_in.len,
-                // .next_in = &z_in,
-                // .avail_out = z_out.len,
-                // .next_out = &z_out,
+                .zalloc = null,
+                .zfree = null,
+                .@"opaque" = null,
+                .avail_out = 0,
+                .avail_in = 0,
+                .next_in = zlib.Z_NULL,
             },
+            .outbuf = try opt.gpa.alloc(u8, CHUNKSIZE),
             .writer = .{
-                .buffer = opt.buffer,
+                .buffer = try opt.gpa.alloc(u8, CHUNKSIZE),
                 .vtable = &.{
                     .drain = drain,
                 },
             },
             .underlying_writer = opt.writer,
+            .gpa = opt.gpa,
         };
         try zLibError(zlib.deflateInit2(
             &self.zstream,
@@ -405,27 +405,51 @@ const ZLibDeflater = struct {
         return self;
     }
 
+    pub fn deinit(self: Self) void {
+        self.gpa.free(self.writer.buffer);
+        self.gpa.free(self.outbuf);
+    }
+
     fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFailed}!usize {
-        _ = splat;
         const self: *Self = @fieldParentPtr("writer", wr);
-        for (blobs) |blob| {
-            self.zstream.next_in = blob;
-            self.zstream.avail_in = blob.len;
-            self.zstream.next_out = wr.buffer;
-            self.zstream.avail_out = wr.buffer.len;
-            while (true) {
-                zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
-                    error.ZLibBuf => continue,
-                    {} => {},
-                    else => {
-                        std.log.err("zlib error: {}", .{err});
-                        return error.WriteFailed;
-                    },
-                };
-                const have = wr.buffer.len - self.zstream.avail_out;
-                try wr.writeAll(self.zstream.next_out[0..have]);
-                break;
+        var count: usize = 0;
+
+        try self.zdrain(wr.buffer[0..wr.end]);
+        count += wr.end;
+        wr.end = 0;
+        for (blobs, 1..) |blob, i| {
+            var splat_i: usize = 0;
+            while ((i != blobs.len and splat_i < 1) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
+                try self.zdrain(blob);
+                count += blob.len;
             }
+        }
+        return count;
+    }
+
+    fn zdrain(self: *Self, blob: []const u8) !void {
+        self.zstream.next_in = @constCast(blob.ptr);
+        self.zstream.avail_in = @intCast(blob.len);
+        while (self.zstream.avail_in > 0) {
+            self.zstream.next_out = self.outbuf.ptr;
+            self.zstream.avail_out = @intCast(self.outbuf.len);
+
+            std.log.err("zstream: {d} {any}", .{ self.writer.end, self.zstream });
+            zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| switch (err) {
+                error.ZLibBuf => {
+                    std.log.err("zstream: {any}", .{self.zstream});
+                    std.log.err("zlib error: {}", .{err});
+                    return;
+                },
+                else => {
+                    std.log.err("zstream: {any}", .{self.zstream});
+                    std.log.err("zlib error: {}\n", .{err});
+                    return error.WriteFailed;
+                },
+            };
+            const have = self.outbuf.len - self.zstream.avail_out;
+            std.log.err("have: {d}", .{have});
+            try self.underlying_writer.writeAll(self.zstream.next_out[0..have]);
         }
     }
 
