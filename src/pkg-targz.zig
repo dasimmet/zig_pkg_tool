@@ -46,10 +46,10 @@ pub fn main() !void {
         return error.NotEnoughArguments;
     }
 
-    var tar_paths = std.ArrayList([]const u8).init(gpa);
+    var tar_paths = std.array_list.Managed([]const u8).init(gpa);
     defer tar_paths.deinit();
 
-    var fs_paths = std.ArrayList([]const u8).init(gpa);
+    var fs_paths = std.array_list.Managed([]const u8).init(gpa);
     defer fs_paths.deinit();
 
     try tar_paths.append("build/zig_version.txt");
@@ -377,6 +377,7 @@ const ZLibDeflater = struct {
     };
 
     pub fn init(opt: Self.Options) !Self {
+        @breakpoint();
         var self: @This() = .{
             .zstream = .{
                 // .zalloc = null,
