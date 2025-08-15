@@ -206,6 +206,7 @@ pub fn process(opt: Options) !void {
     defer compressor.deinit();
 
     var archive = std.tar.Writer{
+        // .underlying_writer = &output.interface,
         .underlying_writer = &compressor.writer,
     };
 
@@ -316,6 +317,7 @@ pub fn process(opt: Options) !void {
         }
     }
     try compressor.writer.flush();
+    try output.interface.flush();
 }
 
 pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !void {

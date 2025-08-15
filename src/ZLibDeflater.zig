@@ -17,7 +17,7 @@ gpa: std.mem.Allocator,
 
 pub const Options = struct {
     gpa: std.mem.Allocator,
-    level: u4 = 6,
+    level: u4 = 9,
     writer: *std.io.Writer,
 };
 
@@ -47,18 +47,19 @@ pub fn init(opt: Self.Options) !Self {
     };
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
+    _ = zlib.deflateEnd(&self.zstream);
     self.gpa.free(self.writer.buffer);
     self.gpa.free(self.outbuf);
 }
 
-inline fn zLibInit(self: *@This()) !void {
+inline fn zStreamInit(self: *@This()) !void {
     if (!self.zstream_initialized) {
         try zLibError(zlib.deflateInit2(
             &self.zstream,
             self.level,
             zlib.Z_DEFLATED,
-            16 + 9,
+            16 + 15,
             zlib.MAX_MEM_LEVEL,
             zlib.Z_DEFAULT_STRATEGY,
         ));
@@ -66,56 +67,18 @@ inline fn zLibInit(self: *@This()) !void {
     }
 }
 
-fn sendFile(
-    wr: *Io.Writer,
-    file_reader: *std.fs.File.Reader,
-    /// Maximum amount of bytes to read from the file. Implementations may
-    /// assume that the file size does not exceed this amount. Data from
-    /// `buffer` does not count towards this limit.
-    limit: Io.Limit,
-) Io.Writer.FileError!usize {
-    const self: *Self = @fieldParentPtr("writer", wr);
-    self.zLibInit() catch |err| {
-        std.log.err("zstream:\n{any}", .{self.zstream});
-        std.log.err("zlib error: {}\n", .{err});
-        return error.WriteFailed;
-    };
-
-    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
-    wr.end = 0;
-    const buf = self.gpa.alloc(u8, @intFromEnum(limit)) catch return error.ReadFailed;
-    defer self.gpa.free(buf);
-    const count = try file_reader.readStreaming(buf);
-    std.debug.assert(buf.len == count);
-    try self.zdrain(buf, zlib.Z_NO_FLUSH);
-    return count;
-}
-
-fn flush(wr: *Io.Writer) Io.Writer.Error!void {
-    const self: *Self = @fieldParentPtr("writer", wr);
-    self.zLibInit() catch |err| {
-        std.log.err("zstream:\n{any}", .{self.zstream});
-        std.log.err("zlib error: {}\n", .{err});
-        return error.WriteFailed;
-    };
-
-    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_FULL_FLUSH);
-    wr.end = 0;
-    try self.underlying_writer.flush();
-}
-
 fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFailed}!usize {
     const self: *Self = @fieldParentPtr("writer", wr);
-    self.zLibInit() catch |err| {
+    self.zStreamInit() catch |err| {
         std.log.err("zstream:\n{any}", .{self.zstream});
         std.log.err("zlib error: {}\n", .{err});
         return error.WriteFailed;
     };
-    var count: usize = 0;
 
     try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
-    count += wr.end;
     wr.end = 0;
+
+    var count: usize = 0;
     for (blobs, 1..) |blob, i| {
         var splat_i: usize = 0;
         while ((i != blobs.len and splat_i < 1) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
@@ -127,17 +90,12 @@ fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFai
 }
 
 fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
-    if (blob.len == 0) return;
+    if (blob.len == 0 and flush_flag != zlib.Z_FULL_FLUSH) return;
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
     while (self.zstream.avail_in > 0) {
         self.zstream.next_out = self.outbuf.ptr;
         self.zstream.avail_out = @intCast(self.outbuf.len);
-
-        std.log.err("zstream pre deflate: {d}\n{any}", .{
-            self.writer.end,
-            self.zstream,
-        });
 
         zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| switch (err) {
             error.ZLibBuf => {
@@ -153,8 +111,49 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
         };
         const have = self.outbuf.len - self.zstream.avail_out;
         std.log.err("have: {d}", .{have});
-        try self.underlying_writer.writeAll(self.zstream.next_out[0..have]);
+        try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
+}
+
+fn sendFile(
+    wr: *Io.Writer,
+    file_reader: *std.fs.File.Reader,
+    /// Maximum amount of bytes to read from the file. Implementations may
+    /// assume that the file size does not exceed this amount. Data from
+    /// `buffer` does not count towards this limit.
+    limit: Io.Limit,
+) Io.Writer.FileError!usize {
+    const self: *Self = @fieldParentPtr("writer", wr);
+    self.zStreamInit() catch |err| {
+        std.log.err("zstream:\n{any}", .{self.zstream});
+        std.log.err("zlib error: {}\n", .{err});
+        return error.WriteFailed;
+    };
+
+    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_NO_FLUSH);
+    wr.end = 0;
+    var transferred: usize = 0;
+    while (transferred < @intFromEnum(limit)) {
+        const to_read = @min(wr.buffer.len, @intFromEnum(limit) - transferred);
+        const just_read = try file_reader.readStreaming(wr.buffer[0..to_read]);
+        transferred += just_read;
+        try self.zdrain(wr.buffer[0..just_read], zlib.Z_NO_FLUSH);
+        if (file_reader.atEnd()) break;
+    }
+    return transferred;
+}
+
+fn flush(wr: *Io.Writer) Io.Writer.Error!void {
+    const self: *Self = @fieldParentPtr("writer", wr);
+    self.zStreamInit() catch |err| {
+        std.log.err("zstream:\n{any}", .{self.zstream});
+        std.log.err("zlib error: {}\n", .{err});
+        return error.WriteFailed;
+    };
+
+    try self.zdrain(wr.buffer[0..wr.end], zlib.Z_FULL_FLUSH);
+    wr.end = 0;
+    try self.underlying_writer.flush();
 }
 
 fn zLibError(ret: c_int) !void {
