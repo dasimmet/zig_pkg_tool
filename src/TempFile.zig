@@ -310,7 +310,7 @@ pub inline fn tmpFileOwned(args: struct {
     prefix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
     flags: std.fs.File.CreateFlags = .{ .read = true },
-    dir_opts: std.fs.Dir.OpenDirOptions = .{},
+    dir_opts: std.fs.Dir.OpenOptions = .{},
 }) !*TmpFile {
     const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
     const tmp_file = try allocator.create(TmpFile);

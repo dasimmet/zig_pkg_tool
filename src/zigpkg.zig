@@ -578,3 +578,9 @@ pub fn cmd_checkout(opt: GlobalOptions, args: []const []const u8) !void {
     try opt.stdout.writeAll(cmd_usage);
     @panic("NOT IMPLEMENTED");
 }
+
+comptime {
+    std.testing.refAllDecls(pkg_extractor);
+    std.testing.refAllDecls(pkg_targz);
+    std.testing.refAllDecls(BuildRunnerTmp);
+}
