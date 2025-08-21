@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
 
     const tests = b.addTest(.{
         .root_module = zigpkg.root_module,
+        .use_llvm = true,
     });
     const test_run = b.addRunArtifact(tests);
     b.step("test", "run tests").dependOn(&test_run.step);

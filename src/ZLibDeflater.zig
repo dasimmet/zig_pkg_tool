@@ -1,6 +1,8 @@
 const std = @import("std");
 const Io = std.Io;
 const Self = @This();
+const Deflater = Self;
+pub const Container = std.compress.flate.Container;
 
 const zlib = @cImport({
     @cInclude("zlib.h");
@@ -9,6 +11,7 @@ const zlib = @cImport({
 const CHUNKSIZE = 16 * 1024;
 
 zstream_initialized: bool,
+container: Container,
 level: u4,
 zstream: zlib.z_stream,
 outbuf: [CHUNKSIZE]u8,
@@ -19,11 +22,13 @@ writer: std.io.Writer,
 pub const Options = struct {
     level: u4 = 9,
     writer: *std.io.Writer,
+    container: Container,
 };
 
-pub fn init(opt: Self.Options) !Self {
+pub fn init(opt: Self.Options) Self {
     var self: Self = .{
         .zstream_initialized = false,
+        .container = opt.container,
         .level = opt.level,
         .zstream = .{
             .next_in = zlib.Z_NULL,
@@ -47,17 +52,17 @@ pub fn init(opt: Self.Options) !Self {
     return self;
 }
 
-pub fn deinit(self: *Self) void {
-    _ = zlib.deflateEnd(&self.zstream);
-}
-
 inline fn zStreamInit(self: *@This()) !void {
     if (!self.zstream_initialized) {
         try zLibError(zlib.deflateInit2(
             &self.zstream,
             self.level,
             zlib.Z_DEFLATED,
-            16 + 15,
+            @as(c_int, switch (self.container) {
+                .raw => -15,
+                .gzip => 16 + 15,
+                .zlib => 15,
+            }),
             zlib.MAX_MEM_LEVEL,
             zlib.Z_DEFAULT_STRATEGY,
         ));
@@ -79,7 +84,7 @@ fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFai
     var count: usize = 0;
     for (blobs, 1..) |blob, i| {
         var splat_i: usize = 0;
-        while ((i != blobs.len and splat_i < 1) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
+        while ((i != blobs.len and splat_i == 0) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
             try self.zdrain(blob);
             count += blob.len;
         }
@@ -139,27 +144,43 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
     };
 
     self.zstream.next_in = wr.buffer.ptr;
-    self.zstream.avail_in = @intCast(wr.buffer.len);
+    self.zstream.avail_in = @intCast(wr.end);
 
-    var end: bool = false;
-    while (!end) {
+    while (self.zstream.avail_in > 0) {
         self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
-        zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
-            error.ZLibStreamEnd => {
-                end = true;
-            },
-            else => {
-                std.log.err("zstream:\n{any}", .{self.zstream});
-                std.log.err("zlib error: {}\n", .{err});
-                return error.WriteFailed;
-            },
+        zLibError(zlib.deflate(&self.zstream, zlib.Z_FULL_FLUSH)) catch |err| {
+            std.log.err("zstream:\n{any}", .{self.zstream});
+            std.log.err("zlib error: {}\n", .{err});
+            return error.WriteFailed;
         };
         const have = self.outbuf.len - self.zstream.avail_out;
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
+
     wr.end = 0;
-    try self.underlying_writer.flush();
+}
+
+pub fn finish(self: *Self) !void {
+    try self.zStreamInit();
+    self.zstream.next_in = self.writer.buffer.ptr;
+    self.zstream.avail_in = @intCast(self.writer.end);
+
+    var stream_at_end: bool = false;
+    while (!stream_at_end) {
+        self.zstream.next_out = &self.outbuf;
+        self.zstream.avail_out = @intCast(self.outbuf.len);
+        zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
+            error.ZLibStreamEnd => {
+                stream_at_end = true;
+            },
+            else => return err,
+        };
+        const have = self.outbuf.len - self.zstream.avail_out;
+        try self.underlying_writer.writeAll(self.outbuf[0..have]);
+    }
+    self.writer.end = 0;
+    try zLibError(zlib.deflateEnd(&self.zstream));
 }
 
 fn zLibError(ret: c_int) !void {
@@ -173,4 +194,64 @@ fn zLibError(ret: c_int) !void {
         zlib.Z_VERSION_ERROR => error.ZLibVersion,
         else => error.ZLibUnknown,
     };
+}
+
+test "fuzz compress zlib deflate -> zig stdlib inflate" {
+    const FlateFuzz = struct {
+        ob: []u8,
+        infbuf: []u8,
+
+        fn testOne(ctx: *@This(), inbuf: []const u8) anyerror!void {
+            if (inbuf.len < 10 or inbuf.len > 4097) return;
+            const container: Container = @enumFromInt(inbuf[0] % std.meta.fields(Container).len);
+            const input = inbuf[1..];
+
+            var ow = std.Io.Writer.fixed(ctx.ob);
+            var deflater: Deflater = .init(.{
+                .writer = &ow,
+                .container = container,
+            });
+            try deflater.writer.writeAll(input);
+            try deflater.finish();
+
+            var infr = std.Io.Reader.fixed(ow.buffered());
+            var flatebuf: [std.compress.flate.max_window_len]u8 = undefined;
+            var inf = std.compress.flate.Decompress.init(
+                &infr,
+                container,
+                &flatebuf,
+            );
+            const out_len = try inf.reader.readSliceShort(ctx.infbuf);
+            const output = ctx.infbuf[0..out_len];
+
+            std.testing.expect(std.mem.eql(u8, input, output)) catch |err| {
+                var epos: usize = 0;
+                for (input, 0..) |_, it| {
+                    if (output.len < it or input[it] != output[it]) {
+                        epos = it;
+                        break;
+                    }
+                }
+                std.log.err("expected:   0x{x}", .{input});
+                std.log.err("actual:     0x{x}", .{output});
+                std.log.err("compressed: 0x{x}", .{ow.buffered()});
+                std.log.err("container:  {} in_len: {} out_len: {}, epos: {}", .{
+                    container,
+                    input.len,
+                    output.len,
+                    epos,
+                });
+                return err;
+            };
+        }
+    };
+    var ctx: FlateFuzz = .{
+        .ob = try std.testing.allocator.alloc(u8, std.math.pow(usize, 2, 20)),
+        .infbuf = try std.testing.allocator.alloc(u8, std.math.pow(usize, 2, 20)),
+    };
+    defer {
+        std.testing.allocator.free(ctx.ob);
+        std.testing.allocator.free(ctx.infbuf);
+    }
+    try std.testing.fuzz(&ctx, FlateFuzz.testOne, .{});
 }

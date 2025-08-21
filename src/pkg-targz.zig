@@ -199,10 +199,10 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    var compressor: ZLibDeflater = try .init(.{
+    var compressor: ZLibDeflater = .init(.{
         .writer = &output.interface,
+        .container = .gzip,
     });
-    defer compressor.deinit();
 
     var archive = std.tar.Writer{
         // .underlying_writer = &output.interface,
@@ -316,7 +316,7 @@ pub fn process(opt: Options) !void {
         }
     }
     try archive.finishPedantically();
-    try compressor.writer.flush();
+    try compressor.finish();
     try output.interface.flush();
 }
 
