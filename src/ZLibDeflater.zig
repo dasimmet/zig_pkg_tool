@@ -81,21 +81,21 @@ fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFai
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffered());
+    try self.zdrain(wr.buffered(), zlib.Z_NO_FLUSH);
     wr.end = 0;
 
     var count: usize = 0;
     for (blobs, 1..) |blob, i| {
         var splat_i: usize = 0;
         while ((i != blobs.len and splat_i == 0) or (i == blobs.len and splat_i < splat)) : (splat_i += 1) {
-            try self.zdrain(blob);
+            try self.zdrain(blob, zlib.Z_NO_FLUSH);
             count += blob.len;
         }
     }
     return count;
 }
 
-fn zdrain(self: *Self, blob: []const u8) !void {
+fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
 
@@ -104,7 +104,12 @@ fn zdrain(self: *Self, blob: []const u8) !void {
     while (self.zstream.avail_out == 0) {
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
-        zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| {
+        zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| {
+            if (flush_flag == zlib.Z_FINISH and err == error.Z_STREAM_END) {
+                const have = self.outbuf.len - self.zstream.avail_out;
+                try self.underlying_writer.writeAll(self.outbuf[0..have]);
+                break;
+            }
             std.log.err("zstream:\n{any}", .{self.zstream});
             std.log.err("zlib error: {}\n", .{err});
             return error.WriteFailed;
@@ -126,14 +131,14 @@ fn sendFile(
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffered());
+    try self.zdrain(wr.buffered(), zlib.Z_NO_FLUSH);
     wr.end = 0;
     var transferred: usize = 0;
     while (limit == .unlimited or transferred < @intFromEnum(limit)) {
         const to_read = @min(wr.buffer.len, @intFromEnum(limit) - transferred);
         const just_read = try file_reader.readStreaming(wr.buffer[0..to_read]);
         transferred += just_read;
-        try self.zdrain(wr.buffer[0..just_read]);
+        try self.zdrain(wr.buffer[0..just_read], zlib.Z_NO_FLUSH);
         if (file_reader.atEnd()) break;
     }
     return transferred;
@@ -148,20 +153,7 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
     };
 
     const blob = wr.buffered();
-    self.zstream.next_in = blob.ptr;
-    self.zstream.avail_in = @intCast(blob.len);
-    self.zstream.next_out = &self.outbuf;
-    self.zstream.avail_out = 0;
-    while (self.zstream.avail_out == 0) {
-        self.zstream.avail_out = @intCast(self.outbuf.len);
-        zLibError(zlib.deflate(&self.zstream, zlib.Z_FULL_FLUSH)) catch |err| {
-            std.log.err("zstream:\n{any}", .{self.zstream});
-            std.log.err("zlib error: {}\n", .{err});
-            return error.WriteFailed;
-        };
-        const have = self.outbuf.len - self.zstream.avail_out;
-        try self.underlying_writer.writeAll(self.outbuf[0..have]);
-    }
+    try self.zdrain(blob, zlib.Z_FULL_FLUSH);
     wr.end = 0;
 }
 
@@ -169,24 +161,7 @@ pub fn finish(self: *Self) !void {
     try self.zStreamInit();
 
     const blob = self.writer.buffered();
-    self.zstream.next_in = blob.ptr;
-    self.zstream.avail_in = @intCast(blob.len);
-
-    self.zstream.next_out = &self.outbuf;
-    self.zstream.avail_out = 0;
-    while (self.zstream.avail_out == 0) {
-        self.zstream.avail_out = @intCast(self.outbuf.len);
-        zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
-            error.ZLibStreamEnd => {
-                const have = self.outbuf.len - self.zstream.avail_out;
-                try self.underlying_writer.writeAll(self.outbuf[0..have]);
-                break;
-            },
-            else => return err,
-        };
-        const have = self.outbuf.len - self.zstream.avail_out;
-        try self.underlying_writer.writeAll(self.outbuf[0..have]);
-    }
+    try self.zdrain(blob, zlib.Z_FINISH);
     self.writer.end = 0;
     try zLibError(zlib.deflateEnd(&self.zstream));
 }
@@ -194,14 +169,14 @@ pub fn finish(self: *Self) !void {
 fn zLibError(ret: c_int) !void {
     return switch (ret) {
         zlib.Z_OK => {},
-        zlib.Z_BUF_ERROR => error.ZLibBuf,
-        zlib.Z_DATA_ERROR => error.ZLibData,
-        zlib.Z_ERRNO => error.ZLibErrno,
-        zlib.Z_MEM_ERROR => error.ZLibMem,
-        zlib.Z_NEED_DICT => error.ZLibNeedDict,
-        zlib.Z_STREAM_END => error.ZLibStreamEnd,
-        zlib.Z_STREAM_ERROR => error.ZLibStream,
-        zlib.Z_VERSION_ERROR => error.ZLibVersion,
+        zlib.Z_BUF_ERROR => error.Z_BUF_ERROR,
+        zlib.Z_DATA_ERROR => error.Z_DATA_ERROR,
+        zlib.Z_ERRNO => error.Z_ERRNO,
+        zlib.Z_MEM_ERROR => error.Z_MEM_ERROR,
+        zlib.Z_NEED_DICT => error.Z_NEED_DICT,
+        zlib.Z_STREAM_END => error.Z_STREAM_END,
+        zlib.Z_STREAM_ERROR => error.Z_STREAM_ERROR,
+        zlib.Z_VERSION_ERROR => error.Z_VERSION_ERROR,
         else => error.ZLibUnknown,
     };
 }
