@@ -11,29 +11,33 @@ const zlib = @import("zlib");
 
 const CHUNKSIZE = 16 * 1024;
 
+arena: *std.heap.ArenaAllocator,
 zstream_initialized: bool,
 container: Container,
 level: u4,
 zstream: zlib.z_stream,
-outbuf: [CHUNKSIZE]u8,
-inbuf: [CHUNKSIZE]u8,
+outbuf: []u8,
 underlying_writer: *std.io.Writer,
 writer: std.io.Writer,
 
 pub const Options = struct {
+    allocator: std.mem.Allocator,
     level: u4 = 9,
     writer: *std.io.Writer,
     container: Container,
 };
 
-pub fn init(opt: Self.Options) Self {
-    var self: Self = .{
+pub fn init(opt: Self.Options) !Self {
+    const arena = try opt.allocator.create(std.heap.ArenaAllocator);
+    arena.* = .init(opt.allocator);
+    return .{
+        .arena = arena,
         .zstream_initialized = false,
         .container = opt.container,
         .level = opt.level,
         .zstream = .{
-            .zalloc = null,
-            .zfree = null,
+            .zalloc = &zalloc,
+            .zfree = &zfree,
             .@"opaque" = null,
             .next_in = zlib.Z_NULL,
             .avail_in = 0,
@@ -41,10 +45,9 @@ pub fn init(opt: Self.Options) Self {
             .avail_out = 0,
             .data_type = zlib.Z_BINARY,
         },
-        .outbuf = undefined,
-        .inbuf = undefined,
+        .outbuf = try arena.allocator().alloc(u8, CHUNKSIZE),
         .writer = .{
-            .buffer = undefined,
+            .buffer = try arena.allocator().alloc(u8, CHUNKSIZE),
             .vtable = &.{
                 .drain = drain,
                 .flush = flush,
@@ -53,12 +56,26 @@ pub fn init(opt: Self.Options) Self {
         },
         .underlying_writer = opt.writer,
     };
-    self.writer.buffer = &self.inbuf;
-    return self;
 }
+
+pub fn deinit(self: *Self) void {
+    const alloc = self.arena.child_allocator;
+    self.arena.deinit();
+    alloc.destroy(self.arena);
+}
+
+fn zalloc(ctx: ?*anyopaque, count: c_uint, size: c_uint) callconv(.c) ?*anyopaque {
+    const self: *Self = @ptrCast(@alignCast(ctx.?));
+    return (self.arena.allocator().alloc(u1, count * size) catch {
+        return null;
+    }).ptr;
+}
+
+fn zfree(_: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {}
 
 inline fn zStreamInit(self: *@This()) !void {
     if (!self.zstream_initialized) {
+        self.zstream.@"opaque" = self;
         try zLibError(zlib.deflateInit2(
             &self.zstream,
             self.level,
@@ -103,7 +120,7 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
 
     self.zstream.avail_out = 0;
     while (self.zstream.avail_out == 0) {
-        self.zstream.next_out = &self.outbuf;
+        self.zstream.next_out = self.outbuf.ptr;
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
         // std.log.warn("zdrain input: {} {x}", .{ self.zstream.avail_in, self.zstream.next_in[0..self.zstream.avail_in] });
@@ -207,10 +224,12 @@ test "fuzz compress zlib deflate -> zig stdlib inflate" {
             const input = Input.fromBytes(inbuf);
 
             var ow = std.Io.Writer.fixed(ctx.ob);
-            var deflater: Deflater = .init(.{
+            var deflater: Deflater = try .init(.{
+                .allocator = std.testing.allocator,
                 .writer = &ow,
                 .container = input.container,
             });
+            defer deflater.deinit();
 
             try deflater.writer.writeAll(input.bytes);
             try deflater.finish();
