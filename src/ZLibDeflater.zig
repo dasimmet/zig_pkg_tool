@@ -39,6 +39,7 @@ pub fn init(opt: Self.Options) Self {
             .avail_in = 0,
             .next_out = zlib.Z_NULL,
             .avail_out = 0,
+            .data_type = zlib.Z_BINARY,
         },
         .outbuf = undefined,
         .inbuf = undefined,
@@ -57,18 +58,17 @@ pub fn init(opt: Self.Options) Self {
 }
 
 inline fn zStreamInit(self: *@This()) !void {
-    const MEM_LEVEL = 8;
     if (!self.zstream_initialized) {
         try zLibError(zlib.deflateInit2(
             &self.zstream,
             self.level,
             zlib.Z_DEFLATED,
             @as(c_int, switch (self.container) {
-                .raw => -15,
-                .gzip => 16 + 15,
-                .zlib => 15,
+                .raw => -1 * zlib.MAX_WBITS,
+                .gzip => 16 + zlib.MAX_WBITS,
+                .zlib => zlib.MAX_WBITS,
             }),
-            MEM_LEVEL,
+            zlib.MAX_MEM_LEVEL,
             zlib.Z_DEFAULT_STRATEGY,
         ));
         self.zstream_initialized = true;
