@@ -139,6 +139,14 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
     });
     zigpkg.linkLibrary(zlib_dep.artifact("z"));
 
+    const zlib_h_write = b.addWriteFiles();
+    const zlib_translate = b.addTranslateC(.{
+        .root_source_file = zlib_h_write.add("zlib_c.h", "#include \"zlib.h\"\n"),
+        .target = target,
+        .optimize = opt,
+    });
+    zigpkg.root_module.addImport("zlib", zlib_translate.createModule());
+
     if (target.result.os.tag == .windows) {
         zigpkg.linkLibC();
     }

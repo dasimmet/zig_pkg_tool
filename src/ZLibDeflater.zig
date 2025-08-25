@@ -7,9 +7,7 @@ const Decompress = std.compress.flate.Decompress;
 
 // needs to link:
 // https://github.com/allyourcodebase/zlib
-const zlib = @cImport({
-    @cInclude("zlib.h");
-});
+const zlib = @import("zlib");
 
 const CHUNKSIZE = 16 * 1024;
 
@@ -34,6 +32,9 @@ pub fn init(opt: Self.Options) Self {
         .container = opt.container,
         .level = opt.level,
         .zstream = .{
+            .zalloc = null,
+            .zfree = null,
+            .@"opaque" = null,
             .next_in = zlib.Z_NULL,
             .avail_in = 0,
             .next_out = zlib.Z_NULL,
@@ -56,6 +57,7 @@ pub fn init(opt: Self.Options) Self {
 }
 
 inline fn zStreamInit(self: *@This()) !void {
+    const MEM_LEVEL = 8;
     if (!self.zstream_initialized) {
         try zLibError(zlib.deflateInit2(
             &self.zstream,
@@ -66,7 +68,7 @@ inline fn zStreamInit(self: *@This()) !void {
                 .gzip => 16 + 15,
                 .zlib => 15,
             }),
-            zlib.MAX_MEM_LEVEL,
+            MEM_LEVEL,
             zlib.Z_DEFAULT_STRATEGY,
         ));
         self.zstream_initialized = true;
