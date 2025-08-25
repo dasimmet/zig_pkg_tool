@@ -104,6 +104,7 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
         self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
+        // std.log.warn("zdrain input: {} {x}", .{ self.zstream.avail_in, self.zstream.next_in[0..self.zstream.avail_in] });
         zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| {
             if (flush_flag == zlib.Z_FINISH and err == error.Z_STREAM_END) {
                 const have = self.outbuf.len - self.zstream.avail_out;
@@ -114,10 +115,10 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
             std.log.err("zlib error: {}\n", .{err});
             return error.WriteFailed;
         };
-        std.debug.assert(self.zstream.avail_in == 0);
         const have = self.outbuf.len - self.zstream.avail_out;
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
+    std.debug.assert(self.zstream.avail_in == 0);
 }
 
 fn sendFile(
