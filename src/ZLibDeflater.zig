@@ -96,11 +96,12 @@ fn drain(wr: *Io.Writer, blobs: []const []const u8, splat: usize) error{WriteFai
 }
 
 fn zdrain(self: *Self, blob: []const u8) !void {
-    if (blob.len == 0) return;
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
-    while (self.zstream.avail_in > 0 or self.zstream.avail_out == 0) {
-        self.zstream.next_out = &self.outbuf;
+
+    self.zstream.next_out = &self.outbuf;
+    self.zstream.avail_out = 0;
+    while (self.zstream.avail_out == 0) {
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
         zLibError(zlib.deflate(&self.zstream, zlib.Z_NO_FLUSH)) catch |err| {
@@ -146,12 +147,12 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
         return error.WriteFailed;
     };
 
-    try self.zdrain(wr.buffered());
-    wr.end = 0;
-
+    const blob = wr.buffered();
+    self.zstream.next_in = blob.ptr;
+    self.zstream.avail_in = @intCast(blob.len);
+    self.zstream.next_out = &self.outbuf;
     self.zstream.avail_out = 0;
     while (self.zstream.avail_out == 0) {
-        self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
         zLibError(zlib.deflate(&self.zstream, zlib.Z_FULL_FLUSH)) catch |err| {
             std.log.err("zstream:\n{any}", .{self.zstream});
@@ -161,24 +162,32 @@ fn flush(wr: *Io.Writer) Io.Writer.Error!void {
         const have = self.outbuf.len - self.zstream.avail_out;
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
+    wr.end = 0;
 }
 
 pub fn finish(self: *Self) !void {
     try self.zStreamInit();
-    try self.zdrain(self.writer.buffered());
-    self.writer.end = 0;
 
-    var stream_at_end: bool = false;
-    while (!stream_at_end) {
-        self.zstream.next_out = &self.outbuf;
+    const blob = self.writer.buffered();
+    self.zstream.next_in = blob.ptr;
+    self.zstream.avail_in = @intCast(blob.len);
+
+    self.zstream.next_out = &self.outbuf;
+    self.zstream.avail_out = 0;
+    while (self.zstream.avail_out == 0) {
         self.zstream.avail_out = @intCast(self.outbuf.len);
         zLibError(zlib.deflate(&self.zstream, zlib.Z_FINISH)) catch |err| switch (err) {
-            error.ZLibStreamEnd => stream_at_end = true,
+            error.ZLibStreamEnd => {
+                const have = self.outbuf.len - self.zstream.avail_out;
+                try self.underlying_writer.writeAll(self.outbuf[0..have]);
+                break;
+            },
             else => return err,
         };
         const have = self.outbuf.len - self.zstream.avail_out;
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
+    self.writer.end = 0;
     try zLibError(zlib.deflateEnd(&self.zstream));
 }
 
