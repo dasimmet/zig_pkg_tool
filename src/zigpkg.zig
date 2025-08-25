@@ -6,7 +6,6 @@ const known_folders = @import("known-folders");
 pub const Manifest = @import("Manifest.zig");
 const Serialize = @import("BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
-pub const ZLibDeflater = @import("ZLibDeflater.zig");
 const dot = @import("runner-dot.zig");
 const viz_network = @import("viz_network.html.zig").viz_network;
 

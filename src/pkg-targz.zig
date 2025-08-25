@@ -3,7 +3,7 @@ const Io = std.Io;
 const builtin = @import("builtin");
 const Manifest = @import("Manifest.zig");
 const tar = std.tar;
-const ZLibDeflater = @import("ZLibDeflater.zig");
+const zlib = @import("zlib");
 
 pub const default_ignores: []const []const u8 = &.{
     "zig-cache/",
@@ -199,7 +199,7 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    var compressor: ZLibDeflater = try .init(.{
+    var compressor = try zlib.Deflate.init(.{
         .allocator = opt.gpa,
         .writer = &output.interface,
         .container = .gzip,
