@@ -99,9 +99,9 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
     self.zstream.next_in = @constCast(blob.ptr);
     self.zstream.avail_in = @intCast(blob.len);
 
-    self.zstream.next_out = &self.outbuf;
     self.zstream.avail_out = 0;
     while (self.zstream.avail_out == 0) {
+        self.zstream.next_out = &self.outbuf;
         self.zstream.avail_out = @intCast(self.outbuf.len);
 
         zLibError(zlib.deflate(&self.zstream, flush_flag)) catch |err| {
@@ -114,6 +114,7 @@ fn zdrain(self: *Self, blob: []const u8, flush_flag: c_int) !void {
             std.log.err("zlib error: {}\n", .{err});
             return error.WriteFailed;
         };
+        std.debug.assert(self.zstream.avail_in == 0);
         const have = self.outbuf.len - self.zstream.avail_out;
         try self.underlying_writer.writeAll(self.outbuf[0..have]);
     }
