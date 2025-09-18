@@ -130,7 +130,7 @@ pub fn fromBuild(
             std.debug.assert(dep.location == .root);
             try tar_paths.append(try gpa.dupe(u8, "build/root"));
             try fs_paths.append(try gpa.dupe(u8, root));
-            var zon_file = std.io.Writer.Allocating.init(gpa);
+            var zon_file = std.Io.Writer.Allocating.init(gpa);
             try zon_file.writer.writeAll("raw:");
             try std.zon.stringify.serialize(build, .{
                 .whitespace = true,
@@ -211,7 +211,7 @@ pub fn process(opt: Options) !void {
         .underlying_writer = &compressor.writer,
     };
 
-    var zon_src: std.io.Writer.Allocating = .init(opt.gpa);
+    var zon_src: std.Io.Writer.Allocating = .init(opt.gpa);
     defer zon_src.deinit();
 
     for (opt.fs_paths, 0..) |fs_path, i| {

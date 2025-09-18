@@ -18,6 +18,9 @@ const builtin = @import("builtin");
 // https://github.com/dasimmet/zig/blob/zon-struct-hashmap/lib/std/zon/parse.zig
 const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
 
+// changes to readFileAllocOptions after this
+const later_than_zig_15_1 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.1") catch unreachable) == .gt;
+
 pub const zonparse = if (zig_15_or_later)
     @import("zonparse-master.zig")
 else
@@ -27,3 +30,34 @@ pub const Diagnostics = if (zig_15_or_later)
     zonparse.Diagnostics
 else
     zonparse.Status;
+
+pub const align_one = if (zig_15_or_later)
+    std.mem.Alignment.@"1"
+else
+    1;
+
+pub fn cwdReadFileAllocZ(
+    subpath: []const u8,
+    allocator: std.mem.Allocator,
+    max_bytes: usize,
+) ![:0]const u8 {
+    const cwd = std.fs.cwd();
+    if (comptime later_than_zig_15_1) {
+        return cwd.readFileAllocOptions(
+            subpath,
+            allocator,
+            std.Io.Limit.limited(max_bytes),
+            align_one,
+            0,
+        );
+    } else {
+        return cwd.readFileAllocOptions(
+            allocator,
+            subpath,
+            max_bytes,
+            null,
+            align_one,
+            0,
+        );
+    }
+}

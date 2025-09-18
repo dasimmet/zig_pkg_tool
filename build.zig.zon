@@ -9,8 +9,8 @@
             .hash = "known_folders-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
         },
         .zlib = .{
-            .url = "git+https://github.com/dasimmet/zlib.git#7e48e730f5881d9675c8a1f41b7b095107b9eb79",
-            .hash = "zlib-1.3.1-ZZQ7lec2AACxgbN9DXLV-gaggqNU66H4W6F8qfxo0EDz",
+            .url = "git+https://github.com/dasimmet/zlib.git#9088e861f11009c54931ffede30f3a82a15c9a60",
+            .hash = "zlib-1.3.1-ZZQ7lVw3AADpAS5B9-0I91RwGLOrX5ybyirsIyrEO6nb",
         },
     },
     .paths = .{

@@ -105,9 +105,9 @@ pub const TmpDir = struct {
         var sys_tmp_dir = try std.fs.openDirAbsolute(sys_tmp_dir_path, .{});
 
         const abs_path = brk: {
-            var path_buf = std.ArrayList(u8).empty;
-            defer path_buf.deinit(allocator);
-            try path_buf.writer(allocator).print("{s}{c}{s}_{s}", .{
+            var path_buf: std.Io.Writer.Allocating = .init(allocator);
+            defer path_buf.deinit();
+            try path_buf.writer.print("{s}{c}{s}_{s}", .{
                 sys_tmp_dir_path,
                 sepbrk: {
                     switch (builtin.os.tag) {
@@ -121,7 +121,7 @@ pub const TmpDir = struct {
                 if (args.prefix != null) args.prefix.? else "tmpdir",
                 random_path,
             });
-            break :brk try path_buf.toOwnedSlice(allocator);
+            break :brk try path_buf.toOwnedSlice();
         };
         const sub_path = abs_path[sys_tmp_dir_path.len + 1 ..]; // +1 for the sep
         const parent_dir_path = abs_path[0..sys_tmp_dir_path.len];
@@ -208,10 +208,10 @@ pub const TmpFile = struct {
         _ = std.fs.base64_encoder.encode(&random_path, &random_bytes);
 
         const abs_path = brk: {
-            var path_buf = std.ArrayList(u8).empty;
-            defer path_buf.deinit(allocator);
+            var path_buf: std.Io.Writer.Allocating = .init(allocator);
+            defer path_buf.deinit();
 
-            try path_buf.writer(allocator).print("{s}{c}{s}_{s}{s}", .{
+            try path_buf.writer.print("{s}{c}{s}_{s}{s}", .{
                 args.tmp_dir.abs_path,
                 sepbrk: {
                     switch (builtin.os.tag) {
@@ -227,7 +227,7 @@ pub const TmpFile = struct {
                 if (args.suffix) |suffix| suffix else "",
             });
 
-            break :brk try path_buf.toOwnedSlice(allocator);
+            break :brk try path_buf.toOwnedSlice();
         };
         const sub_path = abs_path[args.tmp_dir.abs_path.len + 1 ..]; // +1 for sep
         const dir_path = abs_path[0..args.tmp_dir.abs_path.len];

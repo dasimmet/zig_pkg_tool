@@ -133,9 +133,9 @@ pub fn process(opt: Options) !void {
     }
     {
         var fetch_err: ?anyerror = null;
-        var err_buf: std.ArrayList(u8) = .empty;
-        defer err_buf.deinit(opt.gpa);
-        const err_writer = err_buf.writer(opt.gpa);
+        var err_buf: std.Io.Writer.Allocating = .init(opt.gpa);
+        defer err_buf.deinit();
+        const err_writer = &err_buf.writer;
 
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
@@ -169,8 +169,8 @@ pub fn process(opt: Options) !void {
             }
             std.log.info("extracted:\n{s}\n{s}", .{ a.hash, res.stdout });
         }
-        if (err_buf.items.len > 0) {
-            std.log.err("{s}", .{err_buf.items});
+        if (err_buf.written().len > 0) {
+            std.log.err("{s}", .{err_buf.written()});
         }
         if (fetch_err) |fe| return fe;
     }

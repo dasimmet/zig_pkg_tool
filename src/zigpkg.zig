@@ -4,6 +4,7 @@ const pkg_extractor = @import("pkg-extractor.zig");
 const pkg_targz = @import("pkg-targz.zig");
 const known_folders = @import("known-folders");
 pub const Manifest = @import("Manifest.zig");
+pub const zonparse = @import("zonparse.zig").zonparse;
 const Serialize = @import("BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
 const dot = @import("runner-dot.zig");
@@ -37,8 +38,8 @@ const GlobalOptions = struct {
     debug_level: u8 = 0,
     zig_exe: []const u8,
     env_map: std.process.EnvMap,
-    stdout: *std.io.Writer,
-    stderr: *std.io.Writer,
+    stdout: *std.Io.Writer,
+    stderr: *std.Io.Writer,
 };
 
 const CommandMap = []const Command;
@@ -245,13 +246,10 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
 pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
     const root = args[0];
 
-    const zon_src = try std.fs.cwd().readFileAllocOptions(
-        opt.gpa,
+    const zon_src = try Manifest.cwdReadFileAllocZ(
         args[1],
+        opt.gpa,
         std.math.maxInt(u32),
-        1048576,
-        Serialize.align_one,
-        0,
     );
     defer opt.gpa.free(zon_src);
 
@@ -261,7 +259,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
     );
     defer opt.gpa.free(output);
 
-    const parsed = try std.zon.parse.fromSlice(
+    const parsed = try zonparse.fromSlice(
         Serialize,
         opt.gpa,
         zon_src,
@@ -505,7 +503,7 @@ pub fn runZonStdoutCommand(
     errdefer opt.gpa.free(my_src);
 
     return .{
-        .parsed = try std.zon.parse.fromSlice(T, opt.gpa, my_src, null, .{}),
+        .parsed = try zonparse.fromSlice(T, opt.gpa, my_src, null, .{}),
         .source = my_src,
     };
 }
