@@ -332,6 +332,6 @@ pub fn minimumZigVersion(b: *Build) !?[]const u8 {
         else => return err,
     };
 
-    const zf = try Manifest.fromSlice(b.allocator, zon_file, null);
+    const zf = try Manifest.fromSliceAlloc(b.allocator, zon_file, null);
     return zf.minimum_zig_version;
 }

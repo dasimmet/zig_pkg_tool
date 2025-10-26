@@ -259,7 +259,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
     );
     defer opt.gpa.free(output);
 
-    const parsed = try zonparse.fromSlice(
+    const parsed = try zonparse.fromSliceAlloc(
         Serialize,
         opt.gpa,
         zon_src,
@@ -503,7 +503,7 @@ pub fn runZonStdoutCommand(
     errdefer opt.gpa.free(my_src);
 
     return .{
-        .parsed = try zonparse.fromSlice(T, opt.gpa, my_src, null, .{}),
+        .parsed = try zonparse.fromSliceAlloc(T, opt.gpa, my_src, null, .{}),
         .source = my_src,
     };
 }

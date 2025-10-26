@@ -253,7 +253,7 @@ pub fn process(opt: Options) !void {
             var zonDiag: Manifest.ZonDiag = .{};
             defer zonDiag.deinit(opt.gpa);
 
-            manifest = Manifest.fromSlice(
+            manifest = Manifest.fromSliceAlloc(
                 opt.gpa,
                 zon_sliceZ,
                 &zonDiag,

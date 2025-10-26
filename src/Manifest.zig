@@ -18,12 +18,12 @@ fingerprint: ?usize = null,
 dependencies: ?zonparse.ZonStructHashMap(Dependency) = null,
 minimum_zig_version: ?[]const u8 = null,
 
-pub fn fromSlice(
+pub fn fromSliceAlloc(
     allocator: std.mem.Allocator,
     source: [:0]const u8,
     zonStatus: ?*ZonDiag,
 ) !Manifest {
-    return zonparse.fromSlice(
+    return zonparse.fromSliceAlloc(
         Manifest,
         allocator,
         source,
@@ -103,7 +103,7 @@ pub const ManifestFile = struct {
                             ),
                             .manifest = undefined,
                         };
-                        child.manifest = try fromSlice(self.gpa, child.source, &zonDiag);
+                        child.manifest = try fromSliceAlloc(self.gpa, child.source, &zonDiag);
                         return child;
                     }
                 }
