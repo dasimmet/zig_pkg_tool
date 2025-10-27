@@ -20,18 +20,14 @@ const StrLitErr = std.zig.string_literal.Error;
 const NumberLiteralError = std.zig.number_literal.Error;
 const assert = std.debug.assert;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
-pub fn ZonStructHashMap(comptime T: type) type {
-    return struct {
-        pub const Value = T;
-        pub const HashMap = std.StringHashMapUnmanaged(Value);
-        impl: HashMap = .empty,
-    };
-}
 
-pub inline fn isZonStructHashMap(comptime OTHER_T: type) bool {
-    if (@typeInfo(OTHER_T) != .@"struct") return false;
-    if (!@hasDecl(OTHER_T, "Value") or @TypeOf(OTHER_T.Value) != type) return false;
-    return OTHER_T == ZonStructHashMap(OTHER_T.Value);
+/// a hashmap to be populated by a zon struct with runtime known fields as keys
+pub const ZonStructHashMap = std.StringHashMapUnmanaged;
+
+pub inline fn structIsZonHashMap(comptime T: type) bool {
+    if (!@hasDecl(T, "KV") or @TypeOf(T.KV) != type) return false;
+    if (!@hasField(T.KV, "value")) return false;
+    return T == ZonStructHashMap(std.meta.fieldInfo(T.KV, .value).type);
 }
 
 /// Rename when adding or removing support for a type.
@@ -453,13 +449,13 @@ pub fn free(gpa: Allocator, value: anytype) void {
             freeArray(gpa, @TypeOf(array), &array);
         },
         .@"struct" => |@"struct"| {
-            if (isZonStructHashMap(Value)) {
-                var kv_iter = value.impl.iterator();
+            if (structIsZonHashMap(Value)) {
+                var kv_iter = value.iterator();
                 while (kv_iter.next()) |kv| {
                     free(gpa, kv.key_ptr.*);
                     free(gpa, kv.value_ptr.*);
                 }
-                @constCast(&value.impl).deinit(gpa);
+                @constCast(&value).deinit(gpa);
                 return;
             }
             inline for (@"struct".fields) |field| {
@@ -491,7 +487,7 @@ fn requiresAllocator(T: type) bool {
         .pointer => true,
         .array => |array| return array.len > 0 and requiresAllocator(array.child),
         .@"struct" => |@"struct"| inline for (@"struct".fields) |field| {
-            if (isZonStructHashMap(T)) break true;
+            if (structIsZonHashMap(T)) break true;
             if (requiresAllocator(field.type)) {
                 break true;
             }
@@ -845,7 +841,7 @@ const Parser = struct {
     }
 
     fn parseStruct(self: *@This(), T: type, node: Zoir.Node.Index) !T {
-        if (isZonStructHashMap(T)) {
+        if (structIsZonHashMap(T)) {
             return self.parseStructHashmap(T, node);
         }
 
@@ -945,15 +941,15 @@ const Parser = struct {
             .empty_literal => .{ .names = &.{}, .vals = .{ .start = node, .len = 0 } },
             else => return error.WrongType,
         };
-        var result: T = .{};
+        var result: T = .empty;
         for (0..fields.names.len) |i| {
             const name: []const u8 = try self.gpa.dupe(u8, fields.names[i].get(self.zoir)[0..]);
             const value = try self.parseExpr(
-                T.Value,
+                std.meta.fieldInfo(T.KV, .value).type,
                 fields.vals.at(@intCast(i)),
             );
 
-            try result.impl.put(self.gpa, name, value);
+            try result.put(self.gpa, name, value);
         }
 
         return result;
@@ -1305,8 +1301,8 @@ fn canParseTypeInner(
         .@"struct" => |@"struct"| {
             for (visited) |V| if (T == V) return true;
             const new_visited = visited ++ .{T};
-            if (isZonStructHashMap(T)) {
-                return canParseTypeInner(T.Value, new_visited, false);
+            if (structIsZonHashMap(T)) {
+                return canParseTypeInner(std.meta.fieldInfo(T.KV, .value).type, new_visited, false);
             }
             for (@"struct".fields) |field| {
                 if (!field.is_comptime and !canParseTypeInner(field.type, new_visited, false)) {
@@ -3644,5 +3640,65 @@ test "std.zon no alloc" {
     try std.testing.expectEqual(
         Nested{ 1, 2, .{ 3, 4 } },
         try fromZoirNode(Nested, ast, zoir, .root, null, .{}),
+    );
+}
+
+test "std.zon parse manifest" {
+    const gpa = std.testing.allocator;
+
+    const Dependency = struct {
+        url: ?[]const u8 = null,
+        hash: ?[]const u8 = null,
+        path: ?[]const u8 = null,
+        lazy: bool = false,
+    };
+
+    const Manifest = struct {
+        name: []const u8,
+        version: []const u8,
+        fingerprint: ?usize = null,
+        minimum_zig_version: ?[]const u8 = null,
+        dependencies: ?ZonStructHashMap(Dependency) = null,
+        paths: ?[]const []const u8 = null,
+    };
+
+    const manifest = try fromSliceAlloc(Manifest, gpa,
+        \\.{
+        \\    .name = .test_zon_manifest_parse,
+        \\    .version = "0.0.1",
+        \\    .fingerprint = 0,
+        \\    .minimum_zig_version = "0.15.2",
+        \\    .dependencies = .{
+        \\        .test_path = .{
+        \\            .path = ".",
+        \\        },
+        \\        .test_url = .{
+        \\            .url = "https://test-url",
+        \\            .hash = "N-V-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
+        \\            .lazy = true,
+        \\        },
+        \\    },
+        \\    .paths = .{},
+        \\}
+    , null, .{
+        .enum_literals_as_strings = true,
+    });
+    defer free(gpa, manifest);
+    try std.testing.expectEqualStrings(
+        manifest.dependencies.?.get("test_path").?.path.?,
+        ".",
+    );
+    const test_url = manifest.dependencies.?.get("test_url").?;
+    try std.testing.expectEqualStrings(
+        test_url.url.?,
+        "https://test-url",
+    );
+    try std.testing.expectEqualStrings(
+        test_url.hash.?,
+        "N-V-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
+    );
+    try std.testing.expectEqual(
+        test_url.lazy,
+        true,
     );
 }
