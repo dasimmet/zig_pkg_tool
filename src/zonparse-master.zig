@@ -22,7 +22,7 @@ const assert = std.debug.assert;
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
 /// a hashmap to be populated by a zon struct with runtime known fields as keys
-pub const ZonStructHashMap = std.StringHashMapUnmanaged;
+pub const ZonStructHashMap = std.StringArrayHashMapUnmanaged;
 
 pub inline fn structIsZonHashMap(comptime T: type) bool {
     if (!@hasDecl(T, "KV") or @TypeOf(T.KV) != type) return false;
