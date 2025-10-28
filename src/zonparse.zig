@@ -19,7 +19,7 @@ const builtin = @import("builtin");
 const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
 
 // changes to readFileAllocOptions after this
-const later_than_zig_15_1 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.1") catch unreachable) == .gt;
+const later_than_zig_15_1 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.99") catch unreachable) == .gt;
 
 pub const zonparse = if (zig_15_or_later)
     @import("zonparse-master.zig")
