@@ -21,15 +21,9 @@ const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.1
 // changes to readFileAllocOptions after this
 const later_than_zig_15_1 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.99") catch unreachable) == .gt;
 
-pub const zonparse = if (zig_15_or_later)
-    @import("zonparse-master.zig")
-else
-    @import("zonparse-0.14.0.zig");
+pub const zonparse = @import("zonparse-master.zig");
 
-pub const Diagnostics = if (zig_15_or_later)
-    zonparse.Diagnostics
-else
-    zonparse.Status;
+pub const Diagnostics = zonparse.Diagnostics;
 
 pub const align_one = if (zig_15_or_later)
     std.mem.Alignment.@"1"

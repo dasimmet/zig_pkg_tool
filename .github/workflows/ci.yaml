@@ -65,35 +65,3 @@ jobs:
           path: zig-out
           overwrite: false
           include-hidden-files: false
-
-  build_with_zig_0_14_0:
-    name: "Build with zig 0.14.0"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Zig
-        uses: mlugg/setup-zig@v2.0.5
-        with:
-          version: 0.14.0
-
-      - name: Fetch Dependencies
-        run: zig build --verbose --fetch
-
-      - name: Run `fmt`
-        run: zig build --verbose --summary all fmt && git status --porcelain
-
-      - name: Run `test`
-        run: zig build test
-
-      - name: Run `build`
-        run: zig build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: zig_build_0.14.0
-          path: zig-out
-          overwrite: false
-          include-hidden-files: false
