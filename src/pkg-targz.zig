@@ -3,7 +3,7 @@ const Io = std.Io;
 const builtin = @import("builtin");
 const Manifest = @import("Manifest.zig");
 const tar = std.tar;
-const zlib = @import("zlib");
+const flate = @import("flate/flate.zig");
 
 pub const default_ignores: []const []const u8 = &.{
     "zig-cache/",
@@ -199,12 +199,18 @@ pub fn process(opt: Options) !void {
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(&out_buf);
 
-    var compressor = try zlib.Deflate.init(.{
-        .allocator = opt.gpa,
-        .writer = &output.interface,
-        .container = .gzip,
-    });
-    defer compressor.deinit();
+    var compress_buf: [flate.max_window_len]u8 = undefined;
+    var compressor = try flate.Compress.init(
+        &output.interface,
+        &compress_buf,
+        .gzip,
+        .{
+            .good = 256,
+            .nice = 256,
+            .lazy = 256,
+            .chain = 256,
+        },
+    );
 
     var archive = std.tar.Writer{
         // .underlying_writer = &output.interface,
@@ -318,7 +324,7 @@ pub fn process(opt: Options) !void {
         }
     }
     try archive.finishPedantically();
-    try compressor.finish();
+    try compressor.writer.flush();
     try output.interface.flush();
 }
 

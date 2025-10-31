@@ -2,15 +2,11 @@
     .name = .pkg_tool,
     .version = "0.0.0",
     .fingerprint = 0xeec6d0d326821008,
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.15.2",
     .dependencies = .{
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders.git#92defaee76b07487769ca352fd0ba95bc8b42a2f",
             .hash = "known_folders-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
-        },
-        .zlib = .{
-            .url = "git+https://github.com/dasimmet/zlib.git#9088e861f11009c54931ffede30f3a82a15c9a60",
-            .hash = "zlib-1.3.1-ZZQ7lVw3AADpAS5B9-0I91RwGLOrX5ybyirsIyrEO6nb",
         },
     },
     .paths = .{
