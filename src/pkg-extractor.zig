@@ -55,21 +55,33 @@ pub fn process(opt: Options) !void {
     var fbuf: [8192]u8 = undefined;
     var freader = fd.reader(&fbuf);
 
-    const gz_buf = try opt.gpa.alloc(u8, std.compress.flate.max_window_len);
-    defer opt.gpa.free(gz_buf);
+    var flate_buffer: [std.compress.flate.max_window_len]u8 = undefined;
     var gz = std.compress.flate.Decompress.init(
         &freader.interface,
         .gzip,
-        gz_buf,
+        &flate_buffer,
     );
 
     var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var tardiag: std.tar.Diagnostics = .{
+        .allocator = opt.gpa,
+    };
+    defer tardiag.deinit();
     var it: tar.Iterator = .init(&gz.reader, .{
         .file_name_buffer = &file_name_buffer,
         .link_name_buffer = &link_name_buffer,
+        .diagnostics = &tardiag,
     });
-    while (try it.next()) |entry| {
+    var count_entries: usize = 0;
+    while (it.next() catch |err| {
+        std.log.err("err: {} {}", .{ count_entries, err });
+        for (tardiag.errors.items) |errit| {
+            std.log.err("err: {any}", .{errit});
+        }
+        return err;
+    }) |entry| {
+        count_entries += 1;
         if (!std.mem.startsWith(u8, entry.name, tar_prefix)) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,

@@ -134,7 +134,7 @@ pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
         \\
         \\available subcommands:
         \\  create   <deppkg.tar.gz> {build root path}
-        \\  from-zon <deppkg.tar.gz> {build root path}
+        \\  from-zon <deppkg.tar.gz> <build root path> <zon file>
         \\  extract  <deppkg.tar.gz> {build root output path}
         \\  build    <deppkg.tar.gz> <intall prefix> [zig build args] # WIP
         \\  checkout <empty directory for git deps> {build root path} # WIP
@@ -244,20 +244,20 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
 }
 
 pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
+    const output = try std.fs.path.resolve(
+        opt.gpa,
+        &.{ opt.cwd, args[0] },
+    );
+    defer opt.gpa.free(output);
+
     const root = args[0];
 
     const zon_src = try Manifest.cwdReadFileAllocZ(
-        args[1],
+        args[2],
         opt.gpa,
         std.math.maxInt(u32),
     );
     defer opt.gpa.free(zon_src);
-
-    const output = try std.fs.path.resolve(
-        opt.gpa,
-        &.{ opt.cwd, args[2] },
-    );
-    defer opt.gpa.free(output);
 
     const parsed = try zonparse.fromSliceAlloc(
         Serialize,

@@ -170,8 +170,9 @@ fn depPackagesInternal(b: *std.Build, this_b: *std.Build, opt: DepPackageOptions
     run.addArgs(&.{
         "deppkg",
         "from-zon",
-        b.build_root.path.?,
     });
+    const out_file = run.addOutputFileArg(out_basename);
+    run.addArg(b.build_root.path.?);
     run.addFileArg(zon_file);
-    return run.addOutputFileArg(out_basename);
+    return out_file;
 }
