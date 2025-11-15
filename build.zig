@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
     });
     const depPkgInstall = b.addInstallFile(
         depPkgArc,
-        "deppkg/deppkg.tar.gz",
+        "share/pkgtool-deppkg.tar.gz",
     );
     b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
