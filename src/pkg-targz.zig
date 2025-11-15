@@ -208,7 +208,6 @@ pub fn process(opt: Options) !void {
     );
 
     var archive = std.tar.Writer{
-        // .underlying_writer = &output.interface,
         .underlying_writer = &compressor.writer,
     };
 

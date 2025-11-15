@@ -63,20 +63,23 @@ pub fn process(opt: Options) !void {
         &flate_buffer,
     );
 
-    var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var tardiag: std.tar.Diagnostics = .{
         .allocator = opt.gpa,
     };
     defer tardiag.deinit();
+
+    var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+
     var it: tar.Iterator = .init(&gz.reader, .{
         .file_name_buffer = &file_name_buffer,
         .link_name_buffer = &link_name_buffer,
         .diagnostics = &tardiag,
     });
+
     var count_entries: usize = 0;
     while (it.next() catch |err| {
-        std.log.err("err: {} {}", .{ count_entries, err });
+        std.log.err("count_entries: {} err: {}", .{ count_entries, err });
         for (tardiag.errors.items) |errit| {
             std.log.err("err: {any}", .{errit});
         }
