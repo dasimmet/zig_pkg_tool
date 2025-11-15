@@ -1,6 +1,7 @@
 const std = @import("std");
 const tar = std.tar;
 const TempFile = @import("TempFile.zig");
+const flate = @import("flate/flate.zig");
 const tar_prefix = "build/p/";
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
@@ -56,7 +57,7 @@ pub fn process(opt: Options) !void {
     var freader = fd.reader(&fbuf);
 
     var flate_buffer: [std.compress.flate.max_window_len]u8 = undefined;
-    var gz = std.compress.flate.Decompress.init(
+    var gz = flate.Decompress.init(
         &freader.interface,
         .gzip,
         &flate_buffer,

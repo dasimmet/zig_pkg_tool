@@ -200,16 +200,11 @@ pub fn process(opt: Options) !void {
     var output = out_file.writer(&out_buf);
 
     var compress_buf: [flate.max_window_len]u8 = undefined;
-    var compressor = try flate.Compress.init(
+    var compressor: flate.Compress = try .init(
         &output.interface,
         &compress_buf,
         .gzip,
-        .{
-            .good = 256,
-            .nice = 256,
-            .lazy = 256,
-            .chain = 256,
-        },
+        .best,
     );
 
     var archive = std.tar.Writer{
