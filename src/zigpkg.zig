@@ -250,7 +250,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
     );
     defer opt.gpa.free(output);
 
-    const root = args[0];
+    const root = args[1];
 
     const zon_src = try Manifest.cwdReadFileAllocZ(
         args[2],
