@@ -282,11 +282,11 @@ pub fn process(opt: Options) !void {
                 if (manifest) |mani| {
                     if (std.mem.eql(u8, entry.path, "build.zig.zon")) break :include_entry;
                     if (mani.paths) |paths| {
-                        for (paths) |p| {
-                            if (std.mem.startsWith(u8, entry.path, p)) {
-                                break :include_entry;
-                            }
-                        }
+                        var filter: Filter = .{
+                            .include_paths = paths,
+                        };
+
+                        if (filter.includePath(entry.path)) break :include_entry;
                     } else {
                         for (default_ignores) |ignore| {
                             if (std.mem.indexOf(u8, entry.path, ignore)) |_| {
@@ -349,4 +349,38 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
         },
         else => return,
     }
+}
+
+/// exact same logic zig uses for the `paths` manifest field.
+/// except we use a []const []const u8 instead of a hashmap
+const Filter = struct {
+    include_paths: []const []const u8,
+    /// sub_path is relative to the package root.
+    pub fn includePath(self: Filter, sub_path: []const u8) bool {
+        if (self.include_paths.len == 0) return true;
+        for (self.include_paths) |ip| {
+            if (std.mem.eql(u8, ip, "")) return true;
+            if (std.mem.eql(u8, ip, ".")) return true;
+            if (std.mem.eql(u8, ip, sub_path)) return true;
+        }
+
+        // Check if any included paths are parent directories of sub_path.
+        var dirname = sub_path;
+        while (std.fs.path.dirname(dirname)) |next_dirname| {
+            for (self.include_paths) |ip| {
+                if (std.mem.eql(u8, ip, next_dirname)) return true;
+            }
+            dirname = next_dirname;
+        }
+
+        return false;
+    }
+};
+
+test "includePath" {
+    var filter: Filter = .{
+        .include_paths = &.{"src"},
+    };
+    try std.testing.expect(filter.includePath("src/core/unix/SDL_poll.c"));
+    try std.testing.expect(!filter.includePath(".gitignore"));
 }
