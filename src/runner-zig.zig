@@ -1,4 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const runner = @import("runner-zig-master.zig");
+const later_than_zig_15 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.99") catch unreachable) == .gt;
+
+pub const runner = if (later_than_zig_15)
+    @import("runner-zig-master.zig")
+else
+    @import("runner-zig-0.15.X.zig");

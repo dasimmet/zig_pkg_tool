@@ -5,6 +5,7 @@ pub const EmbedRunnerSources = struct {
     pub const @"Manifest.zig" = @embedFile("Manifest.zig");
     pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
     pub const @"runner-zig-master.zig" = @embedFile("runner-zig-master.zig");
+    pub const @"runner-zig-0.15.X.zig" = @embedFile("runner-zig-0.15.X.zig");
     pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
     pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
     pub const @"zonparse-master.zig" = @embedFile("zonparse-master.zig");
