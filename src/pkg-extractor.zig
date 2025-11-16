@@ -106,8 +106,7 @@ pub fn process(opt: Options) !void {
                         const out_fd = try rod.createFile(entry_short_name, .{});
                         defer out_fd.close();
                         var out_writer = out_fd.writer(&.{});
-                        try it.reader.streamExact64(&out_writer.interface, entry.size);
-                        it.unread_file_bytes = 0;
+                        try it.streamRemaining(entry, &out_writer.interface);
                     },
                     .sym_link => {
                         if (std.fs.path.dirname(entry_short_name)) |out_dir_name| {
