@@ -2,7 +2,9 @@ const std = @import("std");
 const tar = std.tar;
 const TempFile = @import("TempFile.zig");
 const flate = @import("flate/flate.zig");
-const tar_prefix = "build/p/";
+const tar_package_prefix = "build/p/";
+const tar_root_prefix = "build/root/";
+
 pub fn main() !void {
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_alloc.allocator();
@@ -32,6 +34,7 @@ pub const Options = struct {
     gpa: std.mem.Allocator,
     zig_exe: []const u8,
     filepath: []const u8,
+    root_out_dir: ?[]const u8 = null,
 };
 
 pub fn process(opt: Options) !void {
@@ -77,6 +80,11 @@ pub fn process(opt: Options) !void {
         .diagnostics = &tardiag,
     });
 
+    const root_out_dir = if (opt.root_out_dir) |rod|
+        try std.fs.cwd().makeOpenPath(rod, .{})
+    else
+        null;
+
     var count_entries: usize = 0;
     while (it.next() catch |err| {
         std.log.err("count_entries: {} err: {}", .{ count_entries, err });
@@ -86,18 +94,44 @@ pub fn process(opt: Options) !void {
         return err;
     }) |entry| {
         count_entries += 1;
-        if (!std.mem.startsWith(u8, entry.name, tar_prefix)) continue;
+        if (root_out_dir) |rod| {
+            if (std.mem.startsWith(u8, entry.name, "build/root/")) {
+                const entry_short_name = entry.name["build/root/".len..];
+                switch (entry.kind) {
+                    .directory => try rod.makePath(entry_short_name),
+                    .file => {
+                        if (std.fs.path.dirname(entry_short_name)) |out_dir_name| {
+                            try rod.makePath(out_dir_name);
+                        }
+                        const out_fd = try rod.createFile(entry_short_name, .{});
+                        defer out_fd.close();
+                        var out_writer = out_fd.writer(&.{});
+                        try it.reader.streamExact64(&out_writer.interface, entry.size);
+                        it.unread_file_bytes = 0;
+                    },
+                    .sym_link => {
+                        if (std.fs.path.dirname(entry_short_name)) |out_dir_name| {
+                            try rod.makePath(out_dir_name);
+                        }
+                        try rod.symLink(entry_short_name, entry.link_name, .{});
+                    },
+                }
+                it.unread_file_bytes = 0;
+                continue;
+            }
+        }
+        if (!std.mem.startsWith(u8, entry.name, tar_package_prefix)) continue;
         const sep_idx = std.mem.indexOfAnyPos(
             u8,
             entry.name,
-            tar_prefix.len,
+            tar_package_prefix.len,
             std.fs.path.sep_str_posix,
         ) orelse entry.name.len;
         const prefix = entry.name[0..sep_idx];
 
         const gop = try temp.getOrPut(prefix);
         if (!gop.found_existing) {
-            const hash = try opt.gpa.dupe(u8, prefix[tar_prefix.len..]);
+            const hash = try opt.gpa.dupe(u8, prefix[tar_package_prefix.len..]);
             gop.value_ptr.* = .{
                 .hash = hash,
                 .tf = try TempFile.tmpFile(.{
@@ -148,6 +182,11 @@ pub fn process(opt: Options) !void {
         }
         it.unread_file_bytes = 0;
     }
+
+    if (opt.root_out_dir) |rod| {
+        std.log.info("extracted: {s}", .{rod});
+    }
+
     {
         var fetch_err: ?anyerror = null;
         var err_buf: std.Io.Writer.Allocating = .init(opt.gpa);

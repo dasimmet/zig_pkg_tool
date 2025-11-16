@@ -45,10 +45,10 @@ const GlobalOptions = struct {
 const CommandMap = []const Command;
 const Command = struct {
     []const u8,
-    *const fn (GlobalOptions, []const []const u8) anyerror!void,
+    *const fn (GlobalOptions, []const []const u8) anyerror!u8,
 };
 
-const commands = &.{
+const commands: CommandMap = &.{
     .{ "dot", cmd_dot },
     .{ "dotall", cmd_dotall },
     .{ "dothtml", cmd_dothtml },
@@ -88,6 +88,8 @@ pub fn main() !void {
 
     if (args.len < 2) {
         try stdout.writeAll(usage);
+        try stdout.flush();
+        try stderr.flush();
         return std.process.exit(1);
     }
 
@@ -115,7 +117,11 @@ pub fn main() !void {
 
     inline for (commands) |cmd| {
         if (std.mem.eql(u8, args[1], cmd[0])) {
-            return cmd[1](opt, args[2..]);
+            const res = try cmd[1](opt, args[2..]);
+            if (res == 0) return;
+            try stdout.flush();
+            try stderr.flush();
+            std.process.exit(res);
         }
     }
 
@@ -123,10 +129,12 @@ pub fn main() !void {
     try stdout.writeAll("unknown command: ");
     try stdout.writeAll(args[1]);
     try stdout.writeAll("\n");
+    try stdout.flush();
+    try stderr.flush();
     return std.process.exit(1);
 }
 
-pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
         \\usage: zigpkg deppkg <-h|--help|subcommand> [args]
         \\
@@ -143,11 +151,11 @@ pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
     ;
     if (args.len < 1) {
         try opt.stdout.writeAll(cmd_usage);
-        return std.process.exit(1);
+        return 1;
     }
     if (helpArg(args[0..1])) {
         try opt.stdout.writeAll(cmd_usage);
-        return std.process.exit(0);
+        return 0;
     }
     inline for (deppkg_commands) |cmd| {
         if (std.mem.eql(u8, args[0], cmd[0])) {
@@ -159,7 +167,7 @@ pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !void {
     try opt.stdout.writeAll("unknown command: ");
     try opt.stdout.writeAll(args[0]);
     try opt.stdout.writeAll("\n");
-    return std.process.exit(1);
+    return 1;
 }
 
 pub fn helpArg(args: []const []const u8) bool {
@@ -172,34 +180,36 @@ pub fn helpArg(args: []const []const u8) bool {
     return false;
 }
 
-pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
-        \\usage: zigpkg extract <deppkg.tar.gz>
+        \\usage: zigpkg extract <deppkg.tar.gz> <output_root>
         \\
     ;
-    if (args.len != 1) {
+    if (args.len != 1 and args.len != 2) {
         try opt.stdout.writeAll(cmd_usage);
-        return std.process.exit(1);
+        return 1;
     }
     if (helpArg(args[0..args.len])) {
         try opt.stdout.writeAll(cmd_usage);
-        return;
+        return 0;
     }
     try pkg_extractor.process(.{
         .gpa = opt.gpa,
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
+        .root_out_dir = if (args.len == 1) null else args[1],
     });
+    return 0;
 }
 
-pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
         \\usage: zigpkg create <deppkg.tar.gz> <<build root path>|--> [z]
         \\
     ;
     if (args.len < 1) {
         try opt.stdout.writeAll(cmd_usage);
-        return std.process.exit(1);
+        return 1;
     }
 
     const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0] });
@@ -241,9 +251,10 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !void {
         root,
         output,
     );
+    return 0;
 }
 
-pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
     const output = try std.fs.path.resolve(
         opt.gpa,
         &.{ opt.cwd, args[0] },
@@ -292,9 +303,10 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !void {
         root,
         output,
     );
+    return 0;
 }
 
-pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
         \\usage: zigpkg dot {--help|build_root_path|--} [zig args]
         \\
@@ -320,10 +332,11 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !void {
             return error.UnknownArgument;
         }
     }
-    return runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
+    try runnerCommand(opt, "runner-dot.zig", root, args[arg_sep..]);
+    return 0;
 }
 
-pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !u8 {
     var arg_sep: usize = 0;
     var root: []const u8 = ".";
     for (args) |arg| {
@@ -376,16 +389,18 @@ pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !void {
         try opt.stdout.writeAll(dot.DotFileWriter.cluster_footer);
     }
     try opt.stdout.writeAll(dot.DotFileWriter.footer);
+    return 0;
 }
 
-pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !u8 {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
     try viz_network.render(b.parsed, opt.stdout);
+    return 0;
 }
 
-pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !u8 {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
@@ -394,9 +409,10 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !void {
             .emit_null_optional_fields = false,
         }),
     });
+    return 0;
 }
 
-pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
@@ -405,6 +421,7 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !void {
         .emit_default_optional_fields = false,
     }, opt.stdout);
     try opt.stdout.writeAll("\n");
+    return 0;
 }
 
 pub fn zonOutputCmd(opt: GlobalOptions, args: []const []const u8) !SerializedZonType(Serialize) {
@@ -551,7 +568,7 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
     }
 }
 
-pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !u8 {
     _ = args;
     const cmd_usage =
         \\usage: zigpkg build <deppkg.tar.gz> <install directory> [zig build args]
@@ -563,7 +580,7 @@ pub fn cmd_build(opt: GlobalOptions, args: []const []const u8) !void {
     @panic("NOT IMPLEMENTED");
 }
 
-pub fn cmd_checkout(opt: GlobalOptions, args: []const []const u8) !void {
+pub fn cmd_checkout(opt: GlobalOptions, args: []const []const u8) !u8 {
     _ = args;
     const cmd_usage =
         \\usage: zigpkg checkout <empty directory for git deps> {build root path} 
