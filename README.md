@@ -59,18 +59,21 @@ based on it).
 This means the user is to provide build options that will fetch all dependencies
 he expects to be in the package.
 
-For now, this tool does not use the exact same filter logic as zig's filter on the `paths`
-field of `build.zig.zon`, so it cannot guarantee that the packaged dependencies
-produce the same hash. In that case the extract command will fail. That could be
-avoided by vendoring zig's Manifest parser or making it available in the standard
-library in the future.
-Not applying any filter would be an option too, but other tools
-like a misconfigured `zls` may write files into the zig package cache and add
-files we dont want too include in the package:
+This tool does use the exact same filter logic as zig's filter on the `paths`
+field of `build.zig.zon`, but for packages without a `build.zig.zon` it uses
+a hard coded list of paths the exclude when packaging:
 
-```
-ls ~/.cache/zig/p/known_folders-0.0.0-Fy-PJtLDAADGDOwYwMkVydMSTp_aN-nfjCZw6qPQ2ECL/.zig-cache
-h  o  tmp  z
+```zig
+pub const default_ignores: []const []const u8 = &.{
+    "zig-cache/",
+    ".zig-cache/",
+    "zig-out/",
+    ".git/",
+    ".svn/",
+    ".venv/",
+    "_venv/",
+    ".spin/",
+};
 ```
 
 ## Graphviz dependency graph
