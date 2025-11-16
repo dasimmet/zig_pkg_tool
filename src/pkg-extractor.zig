@@ -146,6 +146,7 @@ pub fn process(opt: Options) !void {
                 },
             ),
         }
+        it.unread_file_bytes = 0;
     }
     {
         var fetch_err: ?anyerror = null;
