@@ -115,7 +115,6 @@ pub fn process(opt: Options) !void {
                         try rod.symLink(entry_short_name, entry.link_name, .{});
                     },
                 }
-                it.unread_file_bytes = 0;
                 continue;
             }
         }
