@@ -484,6 +484,7 @@ pub fn runZonStdoutCommand(
         .cwd = root,
         .env_map = &opt.env_map,
         .expand_arg0 = .expand,
+        .max_output_bytes = std.math.maxInt(u32),
     }) catch |err| {
         std.log.err("Subprocess error: {}\nArgv: {f}", .{
             err,
