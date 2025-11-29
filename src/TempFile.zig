@@ -269,6 +269,7 @@ pub inline fn tmpDirOwned(args: TmpDir.TmpDirArgs) !*TmpDir {
 /// module tmpFile will create tmp file with std.heap.page_allocator, if need a custom allocator, can use TmpFile.init/TmpFile.initAlloc
 /// this method allows to omit args.tmp_dir. If so, it will create a TmpDir owned by returned TmpFile
 pub inline fn tmpFile(args: struct {
+    io: std.Io,
     tmp_dir: ?*TmpDir = null,
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
@@ -306,6 +307,7 @@ pub inline fn tmpFile(args: struct {
 
 /// module tmpFileOwned will create tmp file with std.heap.page_allocator and is owned by user
 pub inline fn tmpFileOwned(args: struct {
+    io: std.Io,
     tmp_dir: ?*TmpDir = null,
     prefix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
@@ -315,6 +317,7 @@ pub inline fn tmpFileOwned(args: struct {
     const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
     const tmp_file = try allocator.create(TmpFile);
     tmp_file.* = try tmpFile(.{
+        .io = args.io,
         .tmp_dir = args.tmp_dir,
         .prefix = args.prefix,
         .dir_prefix = args.dir_prefix,
@@ -325,23 +328,35 @@ pub inline fn tmpFileOwned(args: struct {
 }
 
 test "Tmp" {
+    var threaded = std.Io.Threaded.init(std.testing.allocator);
+    defer threaded.deinit();
+    const io = threaded.io();
+
     {
-        var tmp_file = try ThisModule.tmpFile(.{});
+        var tmp_file = try ThisModule.tmpFile(.{
+            .io = io,
+        });
         defer tmp_file.deinit();
         try tmp_file.f.writeAll("hello, world!");
         try tmp_file.f.seekTo(0);
         var buf: [4096]u8 = undefined;
-        var read_count = try tmp_file.f.readAll(&buf);
-        try testing.expectEqual(read_count, "hello, world!".len);
-        try testing.expectEqualSlices(u8, buf[0..read_count], "hello, world!");
+        var tmp_reader = tmp_file.f.reader(io, &buf);
+        try tmp_reader.interface.fillMore();
+        try testing.expectEqual(tmp_reader.interface.bufferedLen(), "hello, world!".len);
+        try testing.expectEqualSlices(u8, buf[0..tmp_reader.interface.bufferedLen()], "hello, world!");
 
-        var tmp_file2 = try ThisModule.tmpFile(.{});
+        var tmp_file2 = try ThisModule.tmpFile(.{
+            .io = io,
+        });
+
         defer tmp_file2.deinit();
         try tmp_file2.f.writeAll("hello, world!2");
         try tmp_file2.f.seekTo(0);
-        read_count = try tmp_file2.f.readAll(&buf);
-        try testing.expectEqual(read_count, "hello, world!2".len);
-        try testing.expectEqualSlices(u8, buf[0..read_count], "hello, world!2");
+        var tmp_reader2 = tmp_file2.f.reader(io, &buf);
+        try tmp_reader2.interface.fillMore();
+
+        try testing.expectEqual(tmp_reader2.interface.bufferedLen(), "hello, world!2".len);
+        try testing.expectEqualSlices(u8, tmp_reader2.interface.buffered(), "hello, world!2");
     }
 
     {
@@ -351,26 +366,37 @@ test "Tmp" {
             tmp_dir.allocator.destroy(tmp_dir);
         }
 
-        var tmp_file = try ThisModule.tmpFile(.{ .tmp_dir = tmp_dir });
+        var tmp_file = try ThisModule.tmpFile(.{
+            .io = io,
+            .tmp_dir = tmp_dir,
+        });
         defer tmp_file.deinit();
         try tmp_file.f.writeAll("hello, world!");
         try tmp_file.f.seekTo(0);
         var buf: [4096]u8 = undefined;
-        var read_count = try tmp_file.f.readAll(&buf);
-        try testing.expectEqual(read_count, "hello, world!".len);
-        try testing.expectEqualSlices(u8, buf[0..read_count], "hello, world!");
+        var tmp_reader = tmp_file.f.reader(io, &buf);
+        try tmp_reader.interface.fillMore();
+        try testing.expectEqual(tmp_reader.interface.bufferedLen(), "hello, world!".len);
+        try testing.expectEqualSlices(u8, tmp_reader.interface.buffered(), "hello, world!");
 
-        var tmp_file2 = try ThisModule.tmpFile(.{ .tmp_dir = tmp_dir });
+        var tmp_file2 = try ThisModule.tmpFile(.{
+            .io = io,
+            .tmp_dir = tmp_dir,
+        });
         defer tmp_file2.deinit();
         try tmp_file2.f.writeAll("hello, world!2");
         try tmp_file2.f.seekTo(0);
-        read_count = try tmp_file2.f.readAll(&buf);
-        try testing.expectEqual(read_count, "hello, world!2".len);
-        try testing.expectEqualSlices(u8, buf[0..read_count], "hello, world!2");
+        var tmp_reader2 = tmp_file2.f.reader(io, &buf);
+        try tmp_reader2.interface.fillMore();
+
+        try testing.expectEqual(tmp_reader2.interface.bufferedLen(), "hello, world!2".len);
+        try testing.expectEqualSlices(u8, tmp_reader2.interface.buffered(), "hello, world!2");
     }
 
     {
-        var tmp_file = try ThisModule.tmpFileOwned(.{});
+        var tmp_file = try ThisModule.tmpFileOwned(.{
+            .io = io,
+        });
         defer {
             tmp_file.deinit();
             tmp_file.allocator.destroy(tmp_file);
@@ -379,14 +405,16 @@ test "Tmp" {
         try tmp_file.f.writeAll("hello, world!");
         try tmp_file.f.seekTo(0);
         var buf: [4096]u8 = undefined;
-        const read_count = try tmp_file.f.readAll(&buf);
-        try testing.expectEqual(read_count, "hello, world!".len);
-        try testing.expectEqualSlices(u8, buf[0..read_count], "hello, world!");
+        var tmp_reader = tmp_file.f.reader(io, &buf);
+        try tmp_reader.interface.fillMore();
+        try testing.expectEqualSlices(u8, tmp_reader.interface.buffered(), "hello, world!");
     }
 
     {
         // close file handle and later deinit should work too
-        var tmp_file = try ThisModule.tmpFile(.{});
+        var tmp_file = try ThisModule.tmpFile(.{
+            .io = io,
+        });
         defer {
             tmp_file.deinit();
         }

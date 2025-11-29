@@ -3,7 +3,7 @@ digraph {
 "N0" -> "N1"
 "N0" -> "N5"
 "N0" -> "N7"
-"N1" [label="install generated to deppkg/deppkg.tar.gz", style="filled", fillcolor="#8f6f6f", group="G0", tooltip=""]
+"N1" [label="install generated to share/pkgtool-deppkg.tar.gz", style="filled", fillcolor="#8f6f6f", group="G0", tooltip=""]
 "N1" -> "N2"
 "N2" [label="run exe zigpkg (depkg.tar.gz)", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
 "N2" -> "N3"
@@ -19,29 +19,33 @@ digraph {
 "N9" [label="uninstall", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
 "N10" [label="deppkg", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
 "N10" -> "N1"
-"N11" [label="zigpkg", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N11" [label="exe", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
 "N11" -> "N12"
-"N12" [label="run exe zigpkg", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
+"N12" [label="install zigpkg", style="filled", fillcolor="#309430", group="G0", tooltip=""]
 "N12" -> "N6"
-"N13" [label="test", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
-"N13" -> "N7"
-"N14" [label="dot", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
-"N14" -> "N15"
-"N15" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
-"N15" -> "N16"
-"N15" -> "N17"
-"N16" [label="dot generation", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
-"N16" -> "N6"
-"N17" [label="dot to svg", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
-"N17" -> "N16"
-"N18" [label="fmt", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
-"N18" -> "N19"
-"N19" [label="zig fmt", style="filled", fillcolor="#ffff00", group="G0", tooltip=""]
-"N20" [label="update-build-tree", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N13" [label="zigpkg", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N13" -> "N14"
+"N14" [label="run exe zigpkg", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
+"N14" -> "N6"
+"N15" [label="test", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N15" -> "N7"
+"N16" [label="dot", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N16" -> "N17"
+"N17" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
+"N17" -> "N18"
+"N17" -> "N19"
+"N18" [label="dot generation", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
+"N18" -> "N6"
+"N19" [label="dot to svg", style="filled", fillcolor="#bdb76b", group="G0", tooltip=""]
+"N19" -> "N18"
+"N20" [label="fmt", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
 "N20" -> "N21"
-"N20" -> "N22"
-"N21" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
-"N22" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
+"N21" [label="zig fmt", style="filled", fillcolor="#ffff00", group="G0", tooltip=""]
+"N22" [label="update-build-tree", style="filled", fillcolor="#ffffff", group="G0", tooltip=""]
+"N22" -> "N23"
+"N22" -> "N24"
+"N23" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
+"N24" [label="UpdateSourceFiles", style="filled", fillcolor="#ff44ff", group="G0", tooltip=""]
 subgraph cluster_0 {
   cluster = true
   label = "zig_pkg_tool"
@@ -68,9 +72,11 @@ subgraph cluster_0 {
   "N20"
   "N21"
   "N22"
+  "N23"
+  "N24"
 }
 subgraph cluster_1 {
   cluster = true
-  label = "known_folders-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy"
+  label = "known_folders-0.0.0-Fy-PJovNAAAtqbaXgBhV6G-Z4-WNo7P0Rov-x-npZq21"
 }
 }
