@@ -120,7 +120,7 @@ pub fn build(b: *std.Build) void {
         "dot",
         "test",
         "run",
-    }).captureStdOut());
+    }).captureStdOut(.{}));
     b.step("dot", "install graph.svg").dependOn(&b.addInstallFile(
         svggraph,
         "graph.svg",
