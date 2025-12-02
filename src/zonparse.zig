@@ -19,7 +19,12 @@ const builtin = @import("builtin");
 const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
 
 // changes to readFileAllocOptions after this
-const later_than_zig_15_1 = builtin.zig_version.order(std.SemanticVersion.parse("0.15.99") catch unreachable) == .gt;
+const later_than_zig_15 = std.mem.containsAtLeastScalar(std.math.Order, &.{
+    .gt,
+    .eq,
+}, 1, builtin.zig_version.order(
+    std.SemanticVersion.parse("0.16.0") catch unreachable,
+));
 
 pub const zonparse = @import("zonparse-master.zig");
 
@@ -36,7 +41,7 @@ pub fn cwdReadFileAllocZ(
     max_bytes: usize,
 ) ![:0]const u8 {
     const cwd = std.fs.cwd();
-    if (comptime later_than_zig_15_1) {
+    if (comptime later_than_zig_15) {
         return cwd.readFileAllocOptions(
             subpath,
             allocator,

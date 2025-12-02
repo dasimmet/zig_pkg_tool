@@ -23,20 +23,21 @@ inside this tool.
 > zig build zigpkg -- --help
 usage: zigpkg <subcommand> [--help]
 
-stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
+a multicall too to work with zig's build graphs
 
 available subcommands:
   dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
   dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
+  dothtml "dotall", but output html for vis.js instead of ".dit"
   zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
   json    same as "zon" but output json
-  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
-          dependencies required to build a zig package
+  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files. storing all
+          stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
 
 environment variables:
 
-  ZIG: path to the zig compiler to invoke in subprocesses. defaults to "zig".
-
+  ZIG: path to the zig compiler to invoke in subprocesses.
+       defaults to "zig" in the PATH.
 ```
 
 ## Dependency packages

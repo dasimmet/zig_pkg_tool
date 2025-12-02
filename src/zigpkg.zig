@@ -13,7 +13,7 @@ const viz_network = @import("viz_network.html.zig").viz_network;
 const usage =
     \\usage: zigpkg <subcommand> [--help]
     \\
-    \\stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
+    \\a multicall too to work with zig's build graphs
     \\
     \\available subcommands:
     \\  dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
@@ -21,8 +21,8 @@ const usage =
     \\  dothtml "dotall", but output html for vis.js instead of ".dit"
     \\  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
     \\  json    same as "zon" but output json
-    \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files storing all
-    \\          dependencies required to build a zig package
+    \\  deppkg  more subcommands for creating and working with "deppkg.tar.gz" files. storing all
+    \\          stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
     \\
     \\environment variables:
     \\
@@ -205,10 +205,17 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
 
 pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
+        \\
         \\usage: zigpkg create <deppkg.tar.gz> <<build root path>|--> [z]
+        \\
         \\
     ;
     if (args.len < 1) {
+        try opt.stdout.writeAll(cmd_usage);
+        return 1;
+    }
+
+    if (helpArg(args[0..@min(1, args.len)])) {
         try opt.stdout.writeAll(cmd_usage);
         return 1;
     }
