@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     b.step("test", "run tests").dependOn(&test_run.step);
     b.default_step.dependOn(&test_run.step);
     {
-        const dotgraph = dotGraphStepInternal(b, zigpkg, &.{}).captureStdOut();
+        const dotgraph = dotGraphStepInternal(b, zigpkg, &.{}).captureStdOut(.{});
         const svggraph = svgGraph(b, dotgraph);
 
         const update_dotgraph = b.addUpdateSourceFiles();
