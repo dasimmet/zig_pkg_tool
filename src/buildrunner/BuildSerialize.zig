@@ -321,12 +321,21 @@ pub const TypeId = enum {
     lazy_path_list,
 };
 
+const zig_15_or_later = builtin.zig_version.order(std.SemanticVersion.parse("0.14.99") catch unreachable) == .gt;
+pub const align_one = if (zig_15_or_later)
+    std.mem.Alignment.@"1"
+else
+    1;
+
 pub fn minimumZigVersion(b: *Build) !?[]const u8 {
     const zon_path = try std.fs.path.join(b.allocator, &.{ b.build_root.path.?, "build.zig.zon" });
-    const zon_file = Manifest.cwdReadFileAllocZ(
-        zon_path,
+    const zon_file = std.fs.cwd().readFileAllocOptions(
         b.allocator,
+        zon_path,
         std.math.maxInt(u32),
+        null,
+        align_one,
+        0,
     ) catch |err| switch (err) {
         error.FileNotFound => return null,
         else => return err,

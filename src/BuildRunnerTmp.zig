@@ -1,15 +1,17 @@
 const std = @import("std");
 pub const TempFile = @import("TempFile.zig");
 pub const EmbedRunnerSources = struct {
-    pub const @"BuildSerialize.zig" = @embedFile("BuildSerialize.zig");
-    pub const @"Manifest.zig" = @embedFile("Manifest.zig");
-    pub const @"runner-dot.zig" = @embedFile("runner-dot.zig");
-    pub const @"runner-zig-master.zig" = @embedFile("runner-zig-master.zig");
-    pub const @"runner-zig-0.15.X.zig" = @embedFile("runner-zig-0.15.X.zig");
-    pub const @"runner-zig.zig" = @embedFile("runner-zig.zig");
-    pub const @"runner-zon.zig" = @embedFile("runner-zon.zig");
-    pub const @"zonparse-master.zig" = @embedFile("zonparse-master.zig");
-    pub const @"zonparse.zig" = @embedFile("zonparse.zig");
+    pub const @"BuildSerialize.zig" = @embedFile("buildrunner/BuildSerialize.zig");
+    pub const @"Manifest.zig" = @embedFile("buildrunner/Manifest.zig");
+    pub const @"runner-dot.zig" = @embedFile("buildrunner/runner-dot.zig");
+    pub const @"runner-zig-0.14.X.zig" = @embedFile("buildrunner/runner-zig-0.14.X.zig");
+    pub const @"runner-zig-0.15.X.zig" = @embedFile("buildrunner/runner-zig-0.15.X.zig");
+    pub const @"runner-zig-master.zig" = @embedFile("buildrunner/runner-zig-master.zig");
+    pub const @"runner-zig.zig" = @embedFile("buildrunner/runner-zig.zig");
+    pub const @"runner-zon.zig" = @embedFile("buildrunner/runner-zon.zig");
+    pub const @"zonparse-0.14.X.zig" = @embedFile("buildrunner/zonparse-0.14.X.zig");
+    pub const @"zonparse-master.zig" = @embedFile("buildrunner/zonparse-master.zig");
+    pub const @"zonparse.zig" = @embedFile("buildrunner/zonparse.zig");
 };
 pub const Embedded = BuildRunnerTmp(EmbedRunnerSources);
 

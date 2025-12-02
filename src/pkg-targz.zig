@@ -1,7 +1,8 @@
 const std = @import("std");
 const Io = std.Io;
 const builtin = @import("builtin");
-const Manifest = @import("Manifest.zig");
+const Manifest = @import("buildrunner/Manifest.zig");
+const Serialized = @import("buildrunner/BuildSerialize.zig");
 const tar = std.tar;
 const flate = @import("flate/flate.zig");
 
@@ -100,8 +101,6 @@ pub fn main() !void {
         .fs_paths = fs_paths.items,
     });
 }
-
-const Serialized = @import("BuildSerialize.zig");
 
 /// convert a std.Build zon to a tar.gz archive
 pub fn fromBuild(

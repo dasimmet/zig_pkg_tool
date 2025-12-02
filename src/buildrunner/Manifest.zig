@@ -23,7 +23,7 @@ pub fn fromSliceAlloc(
     source: [:0]const u8,
     zonStatus: ?*ZonDiag,
 ) !Manifest {
-    return zonparse.fromSliceAlloc(
+    return @import("zonparse.zig").fromSliceAlloc(
         Manifest,
         allocator,
         source,
