@@ -10,6 +10,10 @@ pub fn main() !void {
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
 
+    var threaded = std.Io.Threaded.init(gpa);
+    defer threaded.deinit();
+    const io = threaded.io();
+
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
@@ -24,6 +28,7 @@ pub fn main() !void {
     }
 
     try process(.{
+        .io = io,
         .gpa = gpa,
         .zig_exe = zig,
         .filepath = args[1],
@@ -32,6 +37,7 @@ pub fn main() !void {
 
 pub const Options = struct {
     gpa: std.mem.Allocator,
+    io: std.Io,
     zig_exe: []const u8,
     filepath: []const u8,
     root_out_dir: ?[]const u8 = null,
@@ -57,7 +63,7 @@ pub fn process(opt: Options) !void {
 
     const fd = try std.fs.cwd().openFile(opt.filepath, .{});
     var fbuf: [8192]u8 = undefined;
-    var freader = fd.reader(&fbuf);
+    var freader = fd.reader(opt.io, &fbuf);
 
     var flate_buffer: [std.compress.flate.max_window_len]u8 = undefined;
     var gz = flate.Decompress.init(
@@ -133,6 +139,7 @@ pub fn process(opt: Options) !void {
             gop.value_ptr.* = .{
                 .hash = hash,
                 .tf = try TempFile.tmpFile(.{
+                    .io = opt.io,
                     .tmp_dir = &tempD,
                     .prefix = hash,
                     .suffix = ".tar",

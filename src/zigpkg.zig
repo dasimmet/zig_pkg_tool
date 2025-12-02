@@ -33,6 +33,7 @@ const usage =
 ;
 
 const GlobalOptions = struct {
+    io: std.Io,
     gpa: std.mem.Allocator,
     self_exe: []const u8,
     cwd: []const u8,
@@ -71,6 +72,10 @@ pub fn main() !void {
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
 
+    var threaded = std.Io.Threaded.init(gpa);
+    defer threaded.deinit();
+    const io = threaded.io();
+
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
@@ -103,6 +108,7 @@ pub fn main() !void {
     defer gpa.free(cwd);
 
     var opt: GlobalOptions = .{
+        .io = io,
         .gpa = gpa,
         .self_exe = args[0],
         .cwd = cwd,
@@ -195,6 +201,7 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
         return 0;
     }
     try pkg_extractor.process(.{
+        .io = opt.io,
         .gpa = opt.gpa,
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
@@ -240,6 +247,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
         const cp = try known_folders.getPath(
+            opt.io,
             opt.gpa,
             .cache,
         ) orelse return error.CacheNotFound;
@@ -253,6 +261,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
     defer if (cache_is_allocated) opt.gpa.free(cache);
 
     try pkg_targz.fromBuild(
+        opt.io,
         opt.gpa,
         serialized_b.parsed,
         cache,
@@ -292,6 +301,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
         const cp = try known_folders.getPath(
+            opt.io,
             opt.gpa,
             .cache,
         ) orelse return error.CacheNotFound;
@@ -305,6 +315,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
     defer if (cache_is_allocated) opt.gpa.free(cache);
 
     try pkg_targz.fromBuild(
+        opt.io,
         opt.gpa,
         parsed,
         cache,

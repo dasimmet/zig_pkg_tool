@@ -22,6 +22,10 @@ pub fn main() !void {
     const gpa = gpa_alloc.allocator();
     defer _ = gpa_alloc.deinit();
 
+    var threaded = std.Io.Threaded.init(gpa);
+    defer threaded.deinit();
+    const io = threaded.io();
+
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
@@ -95,6 +99,7 @@ pub fn main() !void {
     }
 
     try process(.{
+        .io = io,
         .gpa = gpa,
         .out_path = args[1],
         .tar_paths = tar_paths.items,
@@ -104,6 +109,7 @@ pub fn main() !void {
 
 /// convert a std.Build zon to a tar.gz archive
 pub fn fromBuild(
+    io: std.Io,
     gpa: std.mem.Allocator,
     build: Serialized,
     cache_root: []const u8,
@@ -170,6 +176,7 @@ pub fn fromBuild(
     }
 
     return process(.{
+        .io = io,
         .gpa = gpa,
         .out_path = out_path,
         .tar_paths = tar_paths.items,
@@ -178,6 +185,7 @@ pub fn fromBuild(
 }
 
 const Options = struct {
+    io: std.Io,
     gpa: std.mem.Allocator,
     out_path: []const u8,
     tar_paths: []const []const u8, // paths inside the tar archive. the fist element is expected to be "root"
@@ -242,7 +250,7 @@ pub fn process(opt: Options) !void {
                 defer zf.close();
                 zon_src.clearRetainingCapacity();
                 var zfb: [8192]u8 = undefined;
-                var zfr: std.fs.File.Reader = zf.reader(&zfb);
+                var zfr: std.fs.File.Reader = zf.reader(opt.io, &zfb);
                 _ = try zfr.interface.stream(&zon_src.writer, .unlimited);
                 try zon_src.writer.writeByte(0);
                 const zon_slice = zon_src.written();
@@ -272,7 +280,7 @@ pub fn process(opt: Options) !void {
         defer iter.deinit();
         outer: while (iter.next() catch |err| {
             std.log.err("error accessing: {s}\n{}\n", .{
-                iter.name_buffer.items,
+                iter.inner.name_buffer.items,
                 err,
             });
             return err;
@@ -313,7 +321,7 @@ pub fn process(opt: Options) !void {
                 defer opt.gpa.free(arc_entry.path);
             }
 
-            try writeTarEntry(&archive, &arc_entry);
+            try writeTarEntry(&archive, opt.io, &arc_entry);
         }
     }
     try archive.finishPedantically();
@@ -321,7 +329,7 @@ pub fn process(opt: Options) !void {
     try output.interface.flush();
 }
 
-pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !void {
+pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.fs.Dir.Walker.Entry) !void {
     const file = entry.dir.openFile(
         entry.basename,
         .{},
@@ -335,14 +343,14 @@ pub fn writeTarEntry(arc: *std.tar.Writer, entry: *std.fs.Dir.Walker.Entry) !voi
         .file => {
             var buf: [64]u8 = undefined;
             const stat = try entry.dir.statFile(entry.basename);
-            var reader = file.reader(&buf);
+            var reader = file.reader(io, &buf);
             try arc.writeFileStream(
                 entry.path,
                 try reader.getSize(),
                 &reader.interface,
                 .{
                     .mode = 0,
-                    .mtime = @intCast(@divFloor(stat.mtime, std.time.ns_per_s)),
+                    .mtime = @intCast(stat.mtime.toSeconds()),
                 },
             );
         },
