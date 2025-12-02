@@ -5,7 +5,7 @@ const later_than_zig_14 = std.mem.containsAtLeastScalar(std.math.Order, &.{
     .gt,
     .eq,
 }, 1, builtin.zig_version.order(
-    std.SemanticVersion.parse("0.15.0") catch unreachable,
+    std.SemanticVersion.parse("0.15.0-dev.0") catch unreachable,
 ));
 
 // changes to readFileAllocOptions after this
@@ -13,7 +13,7 @@ const later_than_zig_15 = std.mem.containsAtLeastScalar(std.math.Order, &.{
     .gt,
     .eq,
 }, 1, builtin.zig_version.order(
-    std.SemanticVersion.parse("0.16.0") catch unreachable,
+    std.SemanticVersion.parse("0.16.0-dev.0") catch unreachable,
 ));
 
 pub const zonparse = if (later_than_zig_14)
