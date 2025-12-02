@@ -1,5 +1,6 @@
 const std = @import("std");
 const Manifest = @This();
+pub const cwdReadFileAllocZ = @import("zonparse.zig").cwdReadFileAllocZ;
 pub const zonparse = @import("zonparse.zig").zonparse;
 pub const ZonDiag = @import("zonparse.zig").Diagnostics;
 pub const basename = "build.zig.zon";
@@ -17,12 +18,12 @@ fingerprint: ?usize = null,
 dependencies: ?zonparse.ZonStructHashMap(Dependency) = null,
 minimum_zig_version: ?[]const u8 = null,
 
-pub fn fromSlice(
+pub fn fromSliceAlloc(
     allocator: std.mem.Allocator,
     source: [:0]const u8,
     zonStatus: ?*ZonDiag,
 ) !Manifest {
-    return zonparse.fromSlice(
+    return @import("zonparse.zig").fromSliceAlloc(
         Manifest,
         allocator,
         source,
@@ -95,17 +96,14 @@ pub const ManifestFile = struct {
                         var zonDiag: ZonDiag = .{};
                         var child: ManifestFile = .{
                             .path = zon_path,
-                            .source = try std.fs.cwd().readFileAllocOptions(
+                            .source = try cwdReadFileAllocZ(
                                 self.gpa,
                                 zon_path,
                                 std.math.maxInt(u32),
-                                null,
-                                1,
-                                0,
                             ),
                             .manifest = undefined,
                         };
-                        child.manifest = try fromSlice(self.gpa, child.source, &zonDiag);
+                        child.manifest = try fromSliceAlloc(self.gpa, child.source, &zonDiag);
                         return child;
                     }
                 }

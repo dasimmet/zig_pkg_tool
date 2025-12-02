@@ -235,7 +235,7 @@ pub fn process(opt: Options) !void {
             var zonDiag: Manifest.ZonDiag = .{};
             defer zonDiag.deinit(opt.gpa);
 
-            manifest = Manifest.fromSlice(
+            manifest = Manifest.fromSliceAlloc(
                 opt.gpa,
                 @ptrCast(zon_src.items[0 .. zon_src.items.len - 1]),
                 &zonDiag,

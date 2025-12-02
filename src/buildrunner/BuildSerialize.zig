@@ -329,18 +329,15 @@ else
 
 pub fn minimumZigVersion(b: *Build) !?[]const u8 {
     const zon_path = try std.fs.path.join(b.allocator, &.{ b.build_root.path.?, "build.zig.zon" });
-    const zon_file = std.fs.cwd().readFileAllocOptions(
-        b.allocator,
+    const zon_file = @import("zonparse.zig").cwdReadFileAllocZ(
         zon_path,
+        b.allocator,
         std.math.maxInt(u32),
-        null,
-        align_one,
-        0,
     ) catch |err| switch (err) {
         error.FileNotFound => return null,
         else => return err,
     };
 
-    const zf = try Manifest.fromSlice(b.allocator, zon_file, null);
+    const zf = try Manifest.fromSliceAlloc(b.allocator, zon_file, null);
     return zf.minimum_zig_version;
 }
