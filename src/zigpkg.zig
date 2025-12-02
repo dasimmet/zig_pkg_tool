@@ -319,7 +319,7 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !u8 {
         \\
         \\usage: zigpkg dot {--help|build_root_path|--} [zig args]
         \\
-        \\rerun "zig build" and output a graphviz ".dot" file of all build steps
+        \\rerun "zig build" and output a graphviz ".dot" file of build steps based on args
         \\
         \\
     ;
@@ -346,10 +346,21 @@ pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !u8 {
 }
 
 pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !u8 {
+    const cmd_usage =
+        \\
+        \\usage: zigpkg dotall {--help|build_root_path|--} [zig args]
+        \\
+        \\rerun "zig build" and output a graphviz ".dot" file of all build steps
+        \\
+        \\
+    ;
     var arg_sep: usize = 0;
     var root: []const u8 = ".";
     for (args) |arg| {
-        if (std.mem.eql(u8, arg, "--")) {
+        if (helpArg(&.{arg})) {
+            try opt.stdout.writeAll(cmd_usage);
+            return std.process.exit(0);
+        } else if (std.mem.eql(u8, arg, "--")) {
             arg_sep += 1;
             break;
         } else if (arg_sep == 0) {
