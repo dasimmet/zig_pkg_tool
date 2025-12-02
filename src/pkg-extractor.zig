@@ -1,7 +1,7 @@
 const std = @import("std");
 const tar = std.tar;
 const TempFile = @import("TempFile.zig");
-const flate = @import("flate/flate.zig");
+const flate = std.compress.flate;
 const tar_package_prefix = "build/p/";
 const tar_root_prefix = "build/root/";
 
