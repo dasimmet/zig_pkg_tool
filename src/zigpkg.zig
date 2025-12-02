@@ -26,7 +26,8 @@ const usage =
     \\
     \\environment variables:
     \\
-    \\  ZIG: path to the zig compiler to invoke in subprocesses. defaults to "zig".
+    \\  ZIG: path to the zig compiler to invoke in subprocesses.
+    \\       defaults to "zig" in the PATH.
     \\
     \\
 ;
@@ -173,7 +174,7 @@ pub fn cmd_deppkg(opt: GlobalOptions, args: []const []const u8) !u8 {
 pub fn helpArg(args: []const []const u8) bool {
     for (args) |arg| {
         if (std.mem.eql(u8, arg, "--")) break;
-        inline for (&.{ "--help", "-h", "-?" }) |helparg| {
+        inline for (&.{ "--help", "-h", "-?", "--usage", "help", "-help" }) |helparg| {
             if (std.ascii.eqlIgnoreCase(arg, helparg)) return true;
         }
     }
@@ -308,6 +309,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
 
 pub fn cmd_dot(opt: GlobalOptions, args: []const []const u8) !u8 {
     const cmd_usage =
+        \\
         \\usage: zigpkg dot {--help|build_root_path|--} [zig args]
         \\
         \\rerun "zig build" and output a graphviz ".dot" file of all build steps
@@ -401,6 +403,17 @@ pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !u8 {
 }
 
 pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !u8 {
+    if (helpArg(args[0..@min(1, args.len)])) {
+        try opt.stdout.writeAll(
+            \\
+            \\usage: zigpkg json {path to build root} [--] [arguments to zig build]
+            \\
+            \\rerun "zig build" with a custom build runner and output the build graph as .json to stdout
+            \\
+            \\
+        );
+        return 0;
+    }
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
@@ -413,6 +426,17 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !u8 {
 }
 
 pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
+    if (helpArg(args[0..@min(1, args.len)])) {
+        try opt.stdout.writeAll(
+            \\
+            \\usage: zigpkg zon {path to build root} [--] [arguments to zig build]
+            \\
+            \\rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
+            \\
+            \\
+        );
+        return 0;
+    }
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
