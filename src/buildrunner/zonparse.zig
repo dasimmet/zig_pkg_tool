@@ -42,20 +42,20 @@ pub fn cwdReadFileAllocZ(
     max_bytes: usize,
 ) ![:0]const u8 {
     const cwd = std.fs.cwd();
-    if (comptime later_than_zig_15) {
-        return cwd.readFileAllocOptions(
-            subpath,
-            allocator,
-            std.Io.Limit.limited(max_bytes),
-            align_one,
-            0,
-        );
-    } else {
+    if (comptime later_than_zig_14) {
         return cwd.readFileAllocOptions(
             allocator,
             subpath,
             max_bytes,
             null,
+            align_one,
+            0,
+        );
+    } else {
+        return cwd.readFileAllocOptions(
+            subpath,
+            allocator,
+            std.Io.Limit.limited(max_bytes),
             align_one,
             0,
         );
