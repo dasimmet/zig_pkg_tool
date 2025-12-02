@@ -3,10 +3,10 @@ const print = std.log.info;
 const pkg_extractor = @import("pkg-extractor.zig");
 const pkg_targz = @import("pkg-targz.zig");
 const known_folders = @import("known-folders");
-pub const Manifest = @import("Manifest.zig");
-const Serialize = @import("BuildSerialize.zig");
+pub const Manifest = @import("buildrunner/Manifest.zig");
+const Serialize = @import("buildrunner/BuildSerialize.zig");
 const BuildRunnerTmp = @import("BuildRunnerTmp.zig");
-const dot = @import("runner-dot.zig");
+const dot = @import("buildrunner/runner-dot.zig");
 const viz_network = @import("viz_network.html.zig").viz_network;
 
 const usage =

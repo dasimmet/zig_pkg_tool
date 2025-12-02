@@ -1,6 +1,6 @@
 const std = @import("std");
 // const zon = @import("build.zig.zon");
-const Serialize = @import("src/BuildSerialize.zig");
+const Serialize = @import("src/buildrunner/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
     const update_bsb = b.addUpdateSourceFiles();
