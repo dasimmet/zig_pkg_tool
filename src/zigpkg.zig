@@ -417,7 +417,7 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !u8 {
     const b = try zonOutputCmd(opt, args);
     defer b.deinit(opt.gpa);
 
-    try opt.stdout.print("{f}", .{
+    try opt.stdout.print("{f}\n", .{
         std.json.fmt(b.parsed, .{
             .emit_null_optional_fields = false,
         }),
