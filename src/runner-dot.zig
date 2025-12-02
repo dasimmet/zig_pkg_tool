@@ -11,7 +11,8 @@ pub fn main() !void {
 
 pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) !void {
     _ = ctx;
-    const stdout = std.io.getStdOut().writer();
+    var stdout_file = std.fs.File.stdout().writer(&.{});
+    const stdout = &stdout_file.interface;
     try stdout.writeAll(DotFileWriter.header);
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa_alloc.deinit();
