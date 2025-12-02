@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const Manifest = @import("buildrunner/Manifest.zig");
 const Serialized = @import("buildrunner/BuildSerialize.zig");
 const tar = std.tar;
-const flate = @import("flate/flate.zig");
+const flate = std.compress.flate;
 
 pub const default_ignores: []const []const u8 = &.{
     "zig-cache/",
