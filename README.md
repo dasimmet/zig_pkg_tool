@@ -107,7 +107,7 @@ const svggraph = zig_pkg_tool.svgGraph(b, zig_pkg_tool.dotGraphStep(b, &.{
     "dot",
     "test",
     "run",
-}).captureStdOut());
+}).captureStdOut(.{}));
 b.step("dot", "install graph.svg").dependOn(&b.addInstallFile(
     svggraph,
     "graph.svg",
