@@ -10,34 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # deppkg:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check out repository
-  #       uses: actions/checkout@v4
-
-  #     - name: Set up Zig
-  #       uses: mlugg/setup-zig@v2.0.5
-
-  #     - name: setup zigpkg
-  #       uses: shrink/actions-docker-extract@v3
-  #       with:
-  #         image: "registry.gitlab.com/dasimmet/zig-container:latest"
-  #         path: /bin/zigpkg
-  #         destination: zig-out
-
-  #     - name: create deppkg
-  #       run: ./zig-out/zigpkg deppkg create zig-out/deppkg.tar.gz
-
-  #     - uses: actions/upload-artifact@v4
-  #       with:
-  #         name: deppkg
-  #         path: zig-out/deppkg.tar.gz
-  #         overwrite: false
-  #         include-hidden-files: false
-
-  build_with_zig_master:
-    name: "Build with zig master"
+  build_with_zig:
+    name: "Build with zig"
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Zig
-        uses: mlugg/setup-zig@v2.0.5
+        uses: mlugg/setup-zig@v2.1.0
 
       - name: Fetch Dependencies
         run: zig build --verbose --fetch
@@ -61,7 +35,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zig_build_master
+          name: zig_build
           path: zig-out
           overwrite: false
           include-hidden-files: false
