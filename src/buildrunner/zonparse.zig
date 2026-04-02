@@ -62,8 +62,12 @@ pub fn cwdReadFileAllocZ_master(
     allocator: std.mem.Allocator,
     max_bytes: usize,
 ) ![:0]const u8 {
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
     return cwd.readFileAllocOptions(
+        io,
         subpath,
         allocator,
         std.Io.Limit.limited(max_bytes),

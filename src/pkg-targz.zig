@@ -17,20 +17,11 @@ pub const default_ignores: []const []const u8 = &.{
     ".spin/",
 };
 
-pub fn main() !void {
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
-
-    var threaded = std.Io.Threaded.init(gpa);
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
-
-    var env_map = try std.process.getEnvMap(gpa);
-    defer env_map.deinit();
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const io = init.io;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const env_map = init.environ_map;
 
     const cache_dir = env_map.get("ZIG_GLOBAL_CACHE_DIR") orelse {
         std.log.err("Need ZIG_GLOBAL_CACHE_DIR environment variable\n", .{});
@@ -196,15 +187,15 @@ const Options = struct {
 pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
     if (std.fs.path.dirname(opt.out_path)) |dir| {
-        try cwd.makePath(dir);
+        try cwd.createDirPath(opt.io, dir);
     }
 
-    var out_file = try cwd.createFile(opt.out_path, .{});
-    defer out_file.close();
+    var out_file = try cwd.createFile(opt.io, opt.out_path, .{});
+    defer out_file.close(opt.io);
     var out_buf: [8192]u8 = undefined;
-    var output = out_file.writer(&out_buf);
+    var output = out_file.writer(opt.io, &out_buf);
 
     var compress_buf: [flate.max_window_len]u8 = undefined;
     var compressor: flate.Compress = try .init(
@@ -233,13 +224,13 @@ pub fn process(opt: Options) !void {
 
         try archive.setRoot(archive_path);
 
-        var input = try cwd.openDir(fs_path, .{
+        var input = try cwd.openDir(opt.io, fs_path, .{
             .iterate = true,
             .access_sub_paths = true,
         });
-        defer input.close();
+        defer input.close(opt.io);
 
-        const zon_file = input.openFile("build.zig.zon", .{}) catch |e| switch (e) {
+        const zon_file = input.openFile(opt.io, "build.zig.zon", .{}) catch |e| switch (e) {
             error.FileNotFound => null,
             else => return e,
         };
@@ -247,10 +238,10 @@ pub fn process(opt: Options) !void {
 
         if (zon_file) |zf| {
             const zon_sliceZ: [:0]u8 = blk: {
-                defer zf.close();
+                defer zf.close(opt.io);
                 zon_src.clearRetainingCapacity();
                 var zfb: [8192]u8 = undefined;
-                var zfr: std.fs.File.Reader = zf.reader(opt.io, &zfb);
+                var zfr: std.Io.File.Reader = zf.reader(opt.io, &zfb);
                 _ = try zfr.interface.stream(&zon_src.writer, .unlimited);
                 try zon_src.writer.writeByte(0);
                 const zon_slice = zon_src.written();
@@ -278,7 +269,7 @@ pub fn process(opt: Options) !void {
 
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
-        outer: while (iter.next() catch |err| {
+        outer: while (iter.next(opt.io) catch |err| {
             std.log.err("error accessing: {s}\n{}\n", .{
                 iter.inner.name_buffer.items,
                 err,
@@ -329,20 +320,21 @@ pub fn process(opt: Options) !void {
     try output.interface.flush();
 }
 
-pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.fs.Dir.Walker.Entry) !void {
+pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.Io.Dir.Walker.Entry) !void {
     const file = entry.dir.openFile(
+        io,
         entry.basename,
         .{},
     ) catch |e| switch (e) {
         error.IsDir => return,
         else => return e,
     };
-    defer file.close();
+    defer file.close(io);
 
     switch (entry.kind) {
         .file => {
             var buf: [64]u8 = undefined;
-            const stat = try entry.dir.statFile(entry.basename);
+            const stat = try entry.dir.statFile(io, entry.basename, .{});
             var reader = file.reader(io, &buf);
             try arc.writeFileStream(
                 entry.path,

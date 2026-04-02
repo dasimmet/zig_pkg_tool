@@ -33,13 +33,11 @@ const usage =
 ;
 
 const GlobalOptions = struct {
-    io: std.Io,
-    gpa: std.mem.Allocator,
+    init: std.process.Init,
     self_exe: []const u8,
-    cwd: []const u8,
+    cwd: std.Io.Dir,
     debug_level: u8 = 0,
     zig_exe: []const u8,
-    env_map: std.process.EnvMap,
     stdout: *std.Io.Writer,
     stderr: *std.Io.Writer,
 };
@@ -67,28 +65,18 @@ const deppkg_commands: CommandMap = &.{
     .{ "checkout", cmd_checkout },
 };
 
-pub fn main() !void {
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
-
-    var threaded = std.Io.Threaded.init(gpa);
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
-
-    var env_map = try std.process.getEnvMap(gpa);
-    defer env_map.deinit();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const env_map = init.environ_map;
 
     var stdout_buf: [128]u8 = undefined;
-    var stdout_file = std.fs.File.stdout().writer(&stdout_buf);
+    var stdout_file = std.Io.File.stdout().writer(io, &stdout_buf);
     const stdout = &stdout_file.interface;
     defer stdout.flush() catch {};
 
     var stderr_buf: [128]u8 = undefined;
-    var stderr_file = std.fs.File.stdout().writer(&stderr_buf);
+    var stderr_file = std.Io.File.stdout().writer(io, &stderr_buf);
     const stderr = &stderr_file.interface;
     defer stderr.flush() catch {};
 
@@ -104,16 +92,11 @@ pub fn main() !void {
         return;
     }
 
-    const cwd = try std.process.getCwdAlloc(gpa);
-    defer gpa.free(cwd);
-
     var opt: GlobalOptions = .{
-        .io = io,
-        .gpa = gpa,
+        .init = init,
         .self_exe = args[0],
-        .cwd = cwd,
+        .cwd = std.Io.Dir.cwd(),
         .zig_exe = env_map.get("ZIG") orelse "zig",
-        .env_map = env_map,
         .stdout = stdout,
         .stderr = stderr,
     };
@@ -201,8 +184,9 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
         return 0;
     }
     try pkg_extractor.process(.{
-        .io = opt.io,
-        .gpa = opt.gpa,
+        .io = opt.init.io,
+        .gpa = opt.init.gpa,
+        .env = opt.init.environ_map.*,
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
         .root_out_dir = if (args.len == 1) null else args[1],
@@ -227,8 +211,7 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
         return 1;
     }
 
-    const output = try std.fs.path.resolve(opt.gpa, &.{ opt.cwd, args[0] });
-    defer opt.gpa.free(output);
+    const output = args[0];
 
     const root = if (args.len > 1 and !std.mem.eql(u8, args[1], "--")) args[1] else ".";
     const arg_sep: usize = if (args.len > 1 and std.mem.eql(u8, args[1], "--")) 2 else 1;
@@ -272,51 +255,48 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
 }
 
 pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
-    const output = try std.fs.path.resolve(
-        opt.gpa,
-        &.{ opt.cwd, args[0] },
-    );
-    defer opt.gpa.free(output);
-
+    const output = args[0];
     const root = args[1];
 
+    const gpa = opt.init.gpa;
     const zon_src = try Manifest.cwdReadFileAllocZ(
         args[2],
-        opt.gpa,
+        gpa,
         std.math.maxInt(u32),
     );
-    defer opt.gpa.free(zon_src);
+    defer gpa.free(zon_src);
 
     const parsed = try zonparse.fromSliceAlloc(
         Serialize,
-        opt.gpa,
+        gpa,
         zon_src,
         null,
         .{},
     );
-    defer std.zon.parse.free(opt.gpa, parsed);
+    defer std.zon.parse.free(gpa, parsed);
 
     var cache_is_allocated = false;
-    const cache = if (opt.env_map.get(
+    const cache = if (opt.init.environ_map.get(
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
         const cp = try known_folders.getPath(
-            opt.io,
-            opt.gpa,
+            opt.init.io,
+            gpa,
+            opt.init.environ_map.*,
             .cache,
         ) orelse return error.CacheNotFound;
-        defer opt.gpa.free(cp);
+        defer gpa.free(cp);
         cache_is_allocated = true;
         break :blk try std.fs.path.join(
-            opt.gpa,
+            gpa,
             &.{ cp, "zig" },
         );
     };
-    defer if (cache_is_allocated) opt.gpa.free(cache);
+    defer if (cache_is_allocated) gpa.free(cache);
 
     try pkg_targz.fromBuild(
-        opt.io,
-        opt.gpa,
+        opt.init.io,
+        gpa,
         parsed,
         cache,
         root,
@@ -521,21 +501,22 @@ pub fn runZonStdoutCommand(
     args: []const []const u8,
     T: type,
 ) !SerializedZonType(T) {
-    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
-    defer buildrunner.deinit(opt.gpa);
+    const gpa = opt.init.gpa;
+    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.init, runner);
+    defer buildrunner.deinit(opt.init);
 
     var argv = std.ArrayList([]const u8).empty;
-    defer argv.deinit(opt.gpa);
-    try argv.appendSlice(opt.gpa, &.{
+    defer argv.deinit(gpa);
+    try argv.appendSlice(gpa, &.{
         opt.zig_exe, "build", "--build-runner", buildrunner.runner,
     });
-    try argv.appendSlice(opt.gpa, args);
+    try argv.appendSlice(gpa, args);
 
     const term = std.process.Child.run(.{
         .argv = argv.items,
-        .allocator = opt.gpa,
+        .allocator = gpa,
         .cwd = root,
-        .env_map = &opt.env_map,
+        .env_map = &opt.init.env_map,
         .expand_arg0 = .expand,
         .max_output_bytes = std.math.maxInt(u32),
     }) catch |err| {
@@ -580,7 +561,7 @@ pub fn runZonStdoutCommand(
 }
 
 pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
-    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.gpa, runner);
+    var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.init, runner);
     defer buildrunner.deinit(opt.gpa);
 
     var argv = std.ArrayList([]const u8).empty;
