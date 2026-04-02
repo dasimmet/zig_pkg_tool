@@ -5,20 +5,11 @@ const flate = std.compress.flate;
 const tar_package_prefix = "build/p/";
 const tar_root_prefix = "build/root/";
 
-pub fn main() !void {
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
-
-    var threaded = std.Io.Threaded.init(gpa);
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
-
-    var env_map = try std.process.getEnvMap(gpa);
-    defer env_map.deinit();
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const io = init.io;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const env_map = init.environ_map;
 
     const zig = env_map.get("ZIG") orelse "zig";
 
@@ -45,6 +36,7 @@ pub const Options = struct {
 
 pub fn process(opt: Options) !void {
     var tempD = try TempFile.tmpDir(.{
+        .io = opt.io,
         .prefix = "extractor",
     });
     defer tempD.deinit();

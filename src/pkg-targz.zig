@@ -17,20 +17,11 @@ pub const default_ignores: []const []const u8 = &.{
     ".spin/",
 };
 
-pub fn main() !void {
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
-
-    var threaded = std.Io.Threaded.init(gpa);
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
-
-    var env_map = try std.process.getEnvMap(gpa);
-    defer env_map.deinit();
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const io = init.io;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const env_map = init.environ_map;
 
     const cache_dir = env_map.get("ZIG_GLOBAL_CACHE_DIR") orelse {
         std.log.err("Need ZIG_GLOBAL_CACHE_DIR environment variable\n", .{});
@@ -198,13 +189,13 @@ pub fn process(opt: Options) !void {
 
     const cwd = std.Io.Dir.cwd();
     if (std.fs.path.dirname(opt.out_path)) |dir| {
-        try cwd.makePath(dir);
+        try cwd.createDirPath(opt.io, dir);
     }
 
-    var out_file = try cwd.createFile(opt.out_path, .{});
+    var out_file = try cwd.createFile(opt.io, opt.out_path, .{});
     defer out_file.close();
     var out_buf: [8192]u8 = undefined;
-    var output = out_file.writer(&out_buf);
+    var output = out_file.writer(opt.io, &out_buf);
 
     var compress_buf: [flate.max_window_len]u8 = undefined;
     var compressor: flate.Compress = try .init(
@@ -329,7 +320,7 @@ pub fn process(opt: Options) !void {
     try output.interface.flush();
 }
 
-pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.fs.Dir.Walker.Entry) !void {
+pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.Io.Dir.Walker.Entry) !void {
     const file = entry.dir.openFile(
         entry.basename,
         .{},

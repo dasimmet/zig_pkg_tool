@@ -62,8 +62,9 @@ pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
 /// TmpDir holds the info a new created tmp dir in sys temp dir, it can be created by TmpDir.init or module level tmpDir
 pub const TmpDir = struct {
     pub const TmpDirArgs = struct {
+        io: std.Io,
         prefix: ?[]const u8 = null,
-        opts: std.fs.Dir.OpenOptions = .{},
+        opts: std.Io.Dir.OpenOptions = .{},
     };
 
     allocator: std.mem.Allocator,
@@ -72,8 +73,8 @@ pub const TmpDir = struct {
     parent_dir_path: []const u8,
     // sub_path is slice of abs_path
     sub_path: []const u8,
-    parent_dir: std.fs.Dir,
-    dir: std.fs.Dir,
+    parent_dir: std.Io.Dir,
+    dir: std.Io.Dir,
 
     /// deinit will cleanup the files, close all file handle and then release resources
     pub fn deinit(self: *TmpDir) void {
@@ -96,7 +97,10 @@ pub const TmpDir = struct {
     /// return a TmpDir created in system tmp folder
     pub fn init(allocator: std.mem.Allocator, args: TmpDirArgs) !TmpDir {
         var random_bytes: [ThisModule.random_bytes_count]u8 = undefined;
-        std.crypto.random.bytes(&random_bytes);
+        const seed = std.Io.Timestamp.now(args.io, .awake);
+        var random = std.Random.DefaultPrng.init(@bitCast(seed.toMilliseconds()));
+        random.fill(&random_bytes);
+
         var random_path: [ThisModule.random_path_len]u8 = undefined;
         _ = std.fs.base64_encoder.encode(&random_path, &random_bytes);
 
@@ -155,8 +159,8 @@ pub const TmpFile = struct {
         prefix: ?[]const u8 = null,
         suffix: ?[]const u8 = null,
         dir_prefix: ?[]const u8 = null,
-        flags: std.fs.File.CreateFlags = .{ .read = true },
-        dir_opts: std.fs.Dir.OpenOptions = .{},
+        flags: std.Io.File.CreateFlags = .{ .read = true },
+        dir_opts: std.Io.Dir.OpenOptions = .{},
     };
 
     allocator: std.mem.Allocator,
@@ -169,7 +173,7 @@ pub const TmpFile = struct {
     dir_path: []const u8,
     /// sub_path is slice of abs_path
     sub_path: []const u8,
-    f: std.fs.File,
+    f: std.Io.File,
     fclosed: bool,
 
     /// caution: this deinit only clears mem resources, will not close file or delete tmp files & tmp_dir
@@ -270,16 +274,16 @@ pub inline fn tmpDirOwned(args: TmpDir.TmpDirArgs) !*TmpDir {
 /// this method allows to omit args.tmp_dir. If so, it will create a TmpDir owned by returned TmpFile
 pub inline fn tmpFile(args: struct {
     io: std.Io,
+    gpa: std.mem.Allocator,
     tmp_dir: ?*TmpDir = null,
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
-    flags: std.fs.File.CreateFlags = .{ .read = true },
-    dir_opts: std.fs.Dir.OpenOptions = .{},
+    flags: std.Io.File.CreateFlags = .{ .read = true },
+    dir_opts: std.Io.Dir.OpenOptions = .{},
 }) !TmpFile {
-    const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
     if (args.tmp_dir) |tmp_dir| {
-        return TmpFile.init(allocator, .{
+        return TmpFile.init(args.gpa, .{
             .tmp_dir = tmp_dir,
             .owned_tmp_dir = false,
             .prefix = args.prefix,
@@ -290,11 +294,12 @@ pub inline fn tmpFile(args: struct {
         });
     } else {
         var tmp_dir = try tmpDirOwned(.{
+            .io = args.io,
             .prefix = args.prefix,
             .opts = args.dir_opts,
         });
         _ = &tmp_dir;
-        return TmpFile.init(allocator, .{
+        return TmpFile.init(args.gpa, .{
             .tmp_dir = tmp_dir,
             .owned_tmp_dir = true,
             .prefix = args.prefix,
@@ -328,13 +333,10 @@ pub inline fn tmpFileOwned(args: struct {
 }
 
 test "Tmp" {
-    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
     {
         var tmp_file = try ThisModule.tmpFile(.{
-            .io = io,
+            .io = std.testing.io,
+            .gpa = std.testing.allocator,
         });
         defer tmp_file.deinit();
         try tmp_file.f.writeAll("hello, world!");

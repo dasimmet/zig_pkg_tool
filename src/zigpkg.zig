@@ -67,20 +67,11 @@ const deppkg_commands: CommandMap = &.{
     .{ "checkout", cmd_checkout },
 };
 
-pub fn main() !void {
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_alloc.allocator();
-    defer _ = gpa_alloc.deinit();
-
-    var threaded = std.Io.Threaded.init(gpa);
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
-
-    var env_map = try std.process.getEnvMap(gpa);
-    defer env_map.deinit();
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const io = init.io;
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const env_map = init.environ_map;
 
     var stdout_buf: [128]u8 = undefined;
     var stdout_file = std.fs.File.stdout().writer(&stdout_buf);
