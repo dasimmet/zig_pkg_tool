@@ -130,12 +130,10 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
             .root_source_file = b.path("src/zigpkg.zig"),
             .target = target,
             .optimize = opt,
+            .link_libc = if (target.result.os.tag == .windows) true else null,
         }),
     });
 
-    if (target.result.os.tag == .windows) {
-        zigpkg.linkLibC();
-    }
     const known_folders = b.dependency("known_folders", .{}).module("known-folders");
     zigpkg.root_module.addImport("known-folders", known_folders);
     return zigpkg;

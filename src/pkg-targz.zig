@@ -196,7 +196,7 @@ const Options = struct {
 pub fn process(opt: Options) !void {
     std.debug.assert(opt.fs_paths.len == opt.tar_paths.len);
 
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
     if (std.fs.path.dirname(opt.out_path)) |dir| {
         try cwd.makePath(dir);
     }

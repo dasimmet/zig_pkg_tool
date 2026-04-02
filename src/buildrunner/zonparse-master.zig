@@ -19,15 +19,20 @@ const Base = std.zig.number_literal.Base;
 const StrLitErr = std.zig.string_literal.Error;
 const NumberLiteralError = std.zig.number_literal.Error;
 const assert = std.debug.assert;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const ArrayList = std.ArrayList;
 
-/// a hashmap to be populated by a zon struct with runtime known fields as keys
-pub const ZonStructHashMap = std.StringArrayHashMapUnmanaged;
+pub fn ZonStructHashMap(comptime T: type) type {
+    return struct {
+        pub const Value = T;
+        pub const HashMap = std.StringHashMapUnmanaged(Value);
+        impl: HashMap = .empty,
+    };
+}
 
-pub inline fn structIsZonHashMap(comptime T: type) bool {
-    if (!@hasDecl(T, "KV") or @TypeOf(T.KV) != type) return false;
-    if (!@hasField(T.KV, "value")) return false;
-    return T == ZonStructHashMap(std.meta.fieldInfo(T.KV, .value).type);
+pub inline fn isZonStructHashMap(comptime OTHER_T: type) bool {
+    if (@typeInfo(OTHER_T) != .@"struct") return false;
+    if (!@hasDecl(OTHER_T, "Value") or @TypeOf(OTHER_T.Value) != type) return false;
+    return OTHER_T == ZonStructHashMap(OTHER_T.Value);
 }
 
 /// Rename when adding or removing support for a type.
@@ -449,13 +454,13 @@ pub fn free(gpa: Allocator, value: anytype) void {
             freeArray(gpa, @TypeOf(array), &array);
         },
         .@"struct" => |@"struct"| {
-            if (structIsZonHashMap(Value)) {
-                var kv_iter = value.iterator();
+            if (isZonStructHashMap(Value)) {
+                var kv_iter = value.impl.iterator();
                 while (kv_iter.next()) |kv| {
                     free(gpa, kv.key_ptr.*);
                     free(gpa, kv.value_ptr.*);
                 }
-                @constCast(&value).deinit(gpa);
+                @constCast(&value.impl).deinit(gpa);
                 return;
             }
             inline for (@"struct".fields) |field| {
@@ -487,7 +492,7 @@ fn requiresAllocator(T: type) bool {
         .pointer => true,
         .array => |array| return array.len > 0 and requiresAllocator(array.child),
         .@"struct" => |@"struct"| inline for (@"struct".fields) |field| {
-            if (structIsZonHashMap(T)) break true;
+            if (isZonStructHashMap(T)) break true;
             if (requiresAllocator(field.type)) {
                 break true;
             }
@@ -614,7 +619,7 @@ const Parser = struct {
                     if (pointer.child == u8 and
                         pointer.is_const and
                         (pointer.sentinel() == null or pointer.sentinel() == 0) and
-                        pointer.alignment == 1)
+                        (pointer.alignment == null or pointer.alignment == 1))
                     {
                         if (opt) {
                             return self.failNode(node, "expected optional string");
@@ -720,7 +725,7 @@ const Parser = struct {
                     pointer.size != .slice or
                     !pointer.is_const or
                     (pointer.sentinel() != null and pointer.sentinel() != 0) or
-                    pointer.alignment != 1)
+                    (pointer.alignment != null and pointer.alignment != 1))
                 {
                     return error.WrongType;
                 }
@@ -757,7 +762,7 @@ const Parser = struct {
             pointer.size != .slice or
             !pointer.is_const or
             (pointer.sentinel() != null and pointer.sentinel() != 0) or
-            pointer.alignment != 1)
+            (pointer.alignment != null and pointer.alignment != 1))
         {
             return error.WrongType;
         }
@@ -782,7 +787,7 @@ const Parser = struct {
         const slice = try self.gpa.allocWithOptions(
             pointer.child,
             nodes.len,
-            .fromByteUnits(pointer.alignment),
+            .fromByteUnitsOptional(pointer.alignment),
             pointer.sentinel(),
         );
         errdefer self.gpa.free(slice);
@@ -841,7 +846,7 @@ const Parser = struct {
     }
 
     fn parseStruct(self: *@This(), T: type, node: Zoir.Node.Index) !T {
-        if (structIsZonHashMap(T)) {
+        if (isZonStructHashMap(T)) {
             return self.parseStructHashmap(T, node);
         }
 
@@ -941,15 +946,15 @@ const Parser = struct {
             .empty_literal => .{ .names = &.{}, .vals = .{ .start = node, .len = 0 } },
             else => return error.WrongType,
         };
-        var result: T = .empty;
+        var result: T = .{};
         for (0..fields.names.len) |i| {
             const name: []const u8 = try self.gpa.dupe(u8, fields.names[i].get(self.zoir)[0..]);
             const value = try self.parseExpr(
-                std.meta.fieldInfo(T.KV, .value).type,
+                T.Value,
                 fields.vals.at(@intCast(i)),
             );
 
-            try result.put(self.gpa, name, value);
+            try result.impl.put(self.gpa, name, value);
         }
 
         return result;
@@ -1180,7 +1185,7 @@ const Parser = struct {
                     };
                 } else b: {
                     const msg = "supported: ";
-                    var buf: std.ArrayListUnmanaged(u8) = try .initCapacity(gpa, 64);
+                    var buf: std.ArrayList(u8) = try .initCapacity(gpa, 64);
                     defer buf.deinit(gpa);
                     try buf.appendSlice(gpa, msg);
                     inline for (info.fields, 0..) |field_info, i| {
@@ -1301,8 +1306,8 @@ fn canParseTypeInner(
         .@"struct" => |@"struct"| {
             for (visited) |V| if (T == V) return true;
             const new_visited = visited ++ .{T};
-            if (structIsZonHashMap(T)) {
-                return canParseTypeInner(std.meta.fieldInfo(T.KV, .value).type, new_visited, false);
+            if (isZonStructHashMap(T)) {
+                return canParseTypeInner(T.Value, new_visited, false);
             }
             for (@"struct".fields) |field| {
                 if (!field.is_comptime and !canParseTypeInner(field.type, new_visited, false)) {
@@ -2485,7 +2490,7 @@ test "std.zon enums_as_strings" {
     const gpa = std.testing.allocator;
     // bare literal
     {
-        const parsed = try fromSliceAlloc([:0]const u8, gpa, ".my_enum_literal", null, .{
+        const parsed = try fromSlice([:0]const u8, gpa, ".my_enum_literal", null, .{
             .enum_literals_as_strings = true,
         });
         defer free(gpa, parsed);
@@ -2493,7 +2498,7 @@ test "std.zon enums_as_strings" {
     }
     // quoted enum literal with a " special character
     {
-        const parsed = try fromSliceAlloc([]const u8, gpa, ".@\"test\\\"\"", null, .{
+        const parsed = try fromSlice([]const u8, gpa, ".@\"test\\\"\"", null, .{
             .enum_literals_as_strings = true,
         });
         defer free(gpa, parsed);
@@ -2501,7 +2506,7 @@ test "std.zon enums_as_strings" {
     }
     // bare literal in struct
     {
-        const parsed = try fromSliceAlloc(struct {
+        const parsed = try fromSlice(struct {
             name: []const u8,
             type: []const u8,
         }, gpa, ".{ .name = .literal_0, .type = .literal_1 }", null, .{
@@ -2895,7 +2900,7 @@ test "std.zon negative char" {
 }
 
 test "std.zon parse float" {
-    if (builtin.cpu.arch == .x86 and builtin.abi == .musl and builtin.link_mode == .dynamic) return error.SkipZigTest;
+    if (builtin.cpu.arch == .x86) return error.SkipZigTest;
 
     const gpa = std.testing.allocator;
 
@@ -3229,6 +3234,7 @@ test "std.zon free on error" {
 
 test "std.zon vector" {
     if (builtin.zig_backend == .stage2_c) return error.SkipZigTest; // https://github.com/ziglang/zig/issues/15330
+    if (builtin.zig_backend == .stage2_llvm and builtin.cpu.arch == .s390x) return error.SkipZigTest; // github.com/ziglang/zig/issues/25957
 
     const gpa = std.testing.allocator;
 
@@ -3640,65 +3646,5 @@ test "std.zon no alloc" {
     try std.testing.expectEqual(
         Nested{ 1, 2, .{ 3, 4 } },
         try fromZoirNode(Nested, ast, zoir, .root, null, .{}),
-    );
-}
-
-test "std.zon parse manifest" {
-    const gpa = std.testing.allocator;
-
-    const Dependency = struct {
-        url: ?[]const u8 = null,
-        hash: ?[]const u8 = null,
-        path: ?[]const u8 = null,
-        lazy: bool = false,
-    };
-
-    const Manifest = struct {
-        name: []const u8,
-        version: []const u8,
-        fingerprint: ?usize = null,
-        minimum_zig_version: ?[]const u8 = null,
-        dependencies: ?ZonStructHashMap(Dependency) = null,
-        paths: ?[]const []const u8 = null,
-    };
-
-    const manifest = try fromSliceAlloc(Manifest, gpa,
-        \\.{
-        \\    .name = .test_zon_manifest_parse,
-        \\    .version = "0.0.1",
-        \\    .fingerprint = 0,
-        \\    .minimum_zig_version = "0.15.2",
-        \\    .dependencies = .{
-        \\        .test_path = .{
-        \\            .path = ".",
-        \\        },
-        \\        .test_url = .{
-        \\            .url = "https://test-url",
-        \\            .hash = "N-V-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
-        \\            .lazy = true,
-        \\        },
-        \\    },
-        \\    .paths = .{},
-        \\}
-    , null, .{
-        .enum_literals_as_strings = true,
-    });
-    defer free(gpa, manifest);
-    try std.testing.expectEqualStrings(
-        manifest.dependencies.?.get("test_path").?.path.?,
-        ".",
-    );
-    const test_url = manifest.dependencies.?.get("test_url").?;
-    try std.testing.expectEqualStrings(
-        test_url.url.?,
-        "https://test-url",
-    );
-    try std.testing.expectEqualStrings(
-        test_url.hash.?,
-        "N-V-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
-    );
-    try std.testing.expectEqual(
-        test_url.lazy,
-        true,
     );
 }

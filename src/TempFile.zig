@@ -328,7 +328,7 @@ pub inline fn tmpFileOwned(args: struct {
 }
 
 test "Tmp" {
-    var threaded = std.Io.Threaded.init(std.testing.allocator);
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
 
