@@ -186,7 +186,7 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
     try pkg_extractor.process(.{
         .io = opt.init.io,
         .gpa = opt.init.gpa,
-        .env = opt.init.env_map,
+        .env = opt.init.environ_map.*,
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
         .root_out_dir = if (args.len == 1) null else args[1],
@@ -282,7 +282,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
         const cp = try known_folders.getPath(
             opt.init.io,
             gpa,
-            opt.init.environ_map,
+            opt.init.environ_map.*,
             .cache,
         ) orelse return error.CacheNotFound;
         defer gpa.free(cp);
@@ -292,11 +292,11 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
             &.{ cp, "zig" },
         );
     };
-    defer if (cache_is_allocated) opt.gpa.free(cache);
+    defer if (cache_is_allocated) gpa.free(cache);
 
     try pkg_targz.fromBuild(
-        opt.io,
-        opt.gpa,
+        opt.init.io,
+        gpa,
         parsed,
         cache,
         root,
@@ -503,7 +503,7 @@ pub fn runZonStdoutCommand(
 ) !SerializedZonType(T) {
     const gpa = opt.init.gpa;
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.init, runner);
-    defer buildrunner.deinit(gpa);
+    defer buildrunner.deinit(opt.init);
 
     var argv = std.ArrayList([]const u8).empty;
     defer argv.deinit(gpa);

@@ -35,7 +35,7 @@ pub fn BuildRunnerTmp(T: type) type {
             });
 
             inline for (comptime std.meta.declarations(T)) |decl| {
-                try tempD.dir.writeFile(.{
+                try tempD.dir.writeFile(ainit.io, .{
                     .data = @field(T, decl.name),
                     .sub_path = decl.name,
                 });
