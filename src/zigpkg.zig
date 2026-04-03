@@ -282,6 +282,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
         const cp = try known_folders.getPath(
             opt.init.io,
             gpa,
+            opt.init.environ_map,
             .cache,
         ) orelse return error.CacheNotFound;
         defer gpa.free(cp);
