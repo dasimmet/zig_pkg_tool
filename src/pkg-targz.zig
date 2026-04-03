@@ -193,7 +193,7 @@ pub fn process(opt: Options) !void {
     }
 
     var out_file = try cwd.createFile(opt.io, opt.out_path, .{});
-    defer out_file.close();
+    defer out_file.close(opt.io);
     var out_buf: [8192]u8 = undefined;
     var output = out_file.writer(opt.io, &out_buf);
 
@@ -224,13 +224,13 @@ pub fn process(opt: Options) !void {
 
         try archive.setRoot(archive_path);
 
-        var input = try cwd.openDir(fs_path, .{
+        var input = try cwd.openDir(opt.io, fs_path, .{
             .iterate = true,
             .access_sub_paths = true,
         });
-        defer input.close();
+        defer input.close(opt.io);
 
-        const zon_file = input.openFile("build.zig.zon", .{}) catch |e| switch (e) {
+        const zon_file = input.openFile(opt.io, "build.zig.zon", .{}) catch |e| switch (e) {
             error.FileNotFound => null,
             else => return e,
         };
@@ -238,10 +238,10 @@ pub fn process(opt: Options) !void {
 
         if (zon_file) |zf| {
             const zon_sliceZ: [:0]u8 = blk: {
-                defer zf.close();
+                defer zf.close(opt.io);
                 zon_src.clearRetainingCapacity();
                 var zfb: [8192]u8 = undefined;
-                var zfr: std.fs.File.Reader = zf.reader(opt.io, &zfb);
+                var zfr: std.Io.File.Reader = zf.reader(opt.io, &zfb);
                 _ = try zfr.interface.stream(&zon_src.writer, .unlimited);
                 try zon_src.writer.writeByte(0);
                 const zon_slice = zon_src.written();
@@ -269,7 +269,7 @@ pub fn process(opt: Options) !void {
 
         var iter = try input.walk(opt.gpa);
         defer iter.deinit();
-        outer: while (iter.next() catch |err| {
+        outer: while (iter.next(opt.io) catch |err| {
             std.log.err("error accessing: {s}\n{}\n", .{
                 iter.inner.name_buffer.items,
                 err,
@@ -322,18 +322,19 @@ pub fn process(opt: Options) !void {
 
 pub fn writeTarEntry(arc: *std.tar.Writer, io: std.Io, entry: *std.Io.Dir.Walker.Entry) !void {
     const file = entry.dir.openFile(
+        io,
         entry.basename,
         .{},
     ) catch |e| switch (e) {
         error.IsDir => return,
         else => return e,
     };
-    defer file.close();
+    defer file.close(io);
 
     switch (entry.kind) {
         .file => {
             var buf: [64]u8 = undefined;
-            const stat = try entry.dir.statFile(entry.basename);
+            const stat = try entry.dir.statFile(io, entry.basename, .{});
             var reader = file.reader(io, &buf);
             try arc.writeFileStream(
                 entry.path,

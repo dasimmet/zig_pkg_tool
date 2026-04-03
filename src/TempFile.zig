@@ -4,17 +4,17 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const testing = std.testing;
-const ThisModule = @This();
+const TempFile = @This();
 const known_folders = @import("known-folders");
 
 const random_bytes_count = 12;
 const random_path_len = std.fs.base64_encoder.calcSize(random_bytes_count);
 
 /// return the sys temp dir as string. The return string is owned by user
-pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
+pub fn getSysTmpDir(a: std.mem.Allocator, e: std.process.Environ.Map) ![]const u8 {
     const Impl = switch (builtin.os.tag) {
         .linux, .macos => struct {
-            pub fn get(allocator: std.mem.Allocator) ![]const u8 {
+            pub fn get(allocator: std.mem.Allocator, env: std.process.Environ.Map) ![]const u8 {
                 // cpp17's temp_directory_path gives good reference
                 // https://en.cppreference.com/w/cpp/filesystem/temp_directory_path
                 // POSIX standard, https://en.wikipedia.org/wiki/TMPDIR
@@ -25,7 +25,7 @@ pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
                     "TEMPDIR",
                 };
                 for (posix_tmp_vars) |envvar| {
-                    return std.process.getEnvVarOwned(allocator, envvar) catch continue;
+                    return env.get(envvar) orelse continue;
                 }
                 return try allocator.dupe(u8, "/tmp");
             }
@@ -56,13 +56,15 @@ pub fn getSysTmpDir(a: std.mem.Allocator) ![]const u8 {
         },
     };
 
-    return Impl.get(a);
+    return Impl.get(a, e);
 }
 
 /// TmpDir holds the info a new created tmp dir in sys temp dir, it can be created by TmpDir.init or module level tmpDir
 pub const TmpDir = struct {
     pub const TmpDirArgs = struct {
         io: std.Io,
+        gpa: std.mem.Allocator,
+        env: std.process.Environ.Map,
         prefix: ?[]const u8 = null,
         opts: std.Io.Dir.OpenOptions = .{},
     };
@@ -77,8 +79,8 @@ pub const TmpDir = struct {
     dir: std.Io.Dir,
 
     /// deinit will cleanup the files, close all file handle and then release resources
-    pub fn deinit(self: *TmpDir) void {
-        self.cleanup();
+    pub fn deinit(self: *TmpDir, io: std.Io) void {
+        self.cleanup(io);
         self.allocator.free(self.abs_path);
         self.abs_path = undefined;
         self.parent_dir_path = undefined;
@@ -86,30 +88,30 @@ pub const TmpDir = struct {
     }
 
     /// cleanup will only clean the dir (deleting everything in it), but not release resources
-    pub fn cleanup(self: *TmpDir) void {
-        self.dir.close();
+    pub fn cleanup(self: *TmpDir, io: std.Io) void {
+        self.dir.close(io);
         self.dir = undefined;
-        self.parent_dir.deleteTree(self.sub_path) catch {};
-        self.parent_dir.close();
+        self.parent_dir.deleteTree(io, self.sub_path) catch {};
+        self.parent_dir.close(io);
         self.parent_dir = undefined;
     }
 
     /// return a TmpDir created in system tmp folder
-    pub fn init(allocator: std.mem.Allocator, args: TmpDirArgs) !TmpDir {
-        var random_bytes: [ThisModule.random_bytes_count]u8 = undefined;
+    pub fn init(args: TmpDirArgs) !TmpDir {
+        var random_bytes: [TempFile.random_bytes_count]u8 = undefined;
         const seed = std.Io.Timestamp.now(args.io, .awake);
         var random = std.Random.DefaultPrng.init(@bitCast(seed.toMilliseconds()));
         random.fill(&random_bytes);
 
-        var random_path: [ThisModule.random_path_len]u8 = undefined;
+        var random_path: [TempFile.random_path_len]u8 = undefined;
         _ = std.fs.base64_encoder.encode(&random_path, &random_bytes);
 
-        const sys_tmp_dir_path = try getSysTmpDir(allocator);
-        defer allocator.free(sys_tmp_dir_path);
-        var sys_tmp_dir = try std.fs.openDirAbsolute(sys_tmp_dir_path, .{});
+        const sys_tmp_dir_path = try getSysTmpDir(args.gpa, args.env);
+        defer args.gpa.free(sys_tmp_dir_path);
+        var sys_tmp_dir = try std.Io.Dir.openDirAbsolute(args.io, sys_tmp_dir_path, .{});
 
         const abs_path = brk: {
-            var path_buf: std.Io.Writer.Allocating = .init(allocator);
+            var path_buf: std.Io.Writer.Allocating = .init(args.gpa);
             defer path_buf.deinit();
             try path_buf.writer.print("{s}{c}{s}_{s}", .{
                 sys_tmp_dir_path,
@@ -130,10 +132,10 @@ pub const TmpDir = struct {
         const sub_path = abs_path[sys_tmp_dir_path.len + 1 ..]; // +1 for the sep
         const parent_dir_path = abs_path[0..sys_tmp_dir_path.len];
 
-        const tmp_dir = try sys_tmp_dir.makeOpenPath(sub_path, .{});
+        const tmp_dir = try sys_tmp_dir.createDirPathOpen(args.io, sub_path, .{});
 
         return .{
-            .allocator = allocator,
+            .allocator = args.gpa,
             .abs_path = abs_path,
             .parent_dir_path = parent_dir_path,
             .sub_path = sub_path,
@@ -154,7 +156,9 @@ pub const TmpDir = struct {
 /// tmpFile
 pub const TmpFile = struct {
     const TmpFileArgs = struct {
-        tmp_dir: *TmpDir,
+        io: std.Io,
+        gpa: std.mem.Allocator,
+        tmp_dir: TmpDir,
         owned_tmp_dir: bool = false,
         prefix: ?[]const u8 = null,
         suffix: ?[]const u8 = null,
@@ -165,7 +169,7 @@ pub const TmpFile = struct {
 
     allocator: std.mem.Allocator,
     /// the tmp dir contains this file, it can be owned or not owned
-    tmp_dir: *TmpDir,
+    tmp_dir: TmpDir,
     /// indicates whether tmp_dir is owned by us. If true, deinit method will destory tmp_dir when called
     owned_tmp_dir: bool,
     abs_path: []const u8,
@@ -178,16 +182,16 @@ pub const TmpFile = struct {
 
     /// caution: this deinit only clears mem resources, will not close file or delete tmp files & tmp_dir
     /// need manually close file, and clean them with tmp_dir
-    pub fn deinit(self: *TmpFile) void {
+    pub fn deinit(self: *TmpFile, io: std.Io) void {
         defer {
             if (self.owned_tmp_dir) {
-                self.tmp_dir.deinit();
+                self.tmp_dir.deinit(io);
                 self.allocator.destroy(self.tmp_dir);
                 self.tmp_dir = undefined;
                 self.owned_tmp_dir = false;
             }
         }
-        self.close();
+        self.close(io);
         self.allocator.free(self.abs_path);
         self.abs_path = undefined;
         self.dir_path = undefined;
@@ -195,9 +199,9 @@ pub const TmpFile = struct {
     }
 
     /// This method only close file handles, will not release the path resources
-    pub fn close(self: *TmpFile) void {
+    pub fn close(self: *TmpFile, io: std.Io) void {
         if (!self.fclosed) {
-            self.f.close();
+            self.f.close(io);
             self.f = undefined;
             self.fclosed = true;
         }
@@ -205,14 +209,17 @@ pub const TmpFile = struct {
 
     /// return a TmpFile created in tmp dir in sys temp dir. Tmp dir must be provided in args. If do not want to provide
     /// tmp dir and let system auto create, use module level tmpFile
-    pub fn init(allocator: std.mem.Allocator, args: TmpFileArgs) !TmpFile {
-        var random_bytes: [ThisModule.random_bytes_count]u8 = undefined;
-        std.crypto.random.bytes(&random_bytes);
-        var random_path: [ThisModule.random_path_len]u8 = undefined;
+    pub fn init(args: TmpFileArgs) !TmpFile {
+        var random_bytes: [TempFile.random_bytes_count]u8 = undefined;
+        const seed = std.Io.Timestamp.now(args.io, .awake);
+        var random = std.Random.DefaultPrng.init(@bitCast(seed.toMilliseconds()));
+        random.fill(&random_bytes);
+
+        var random_path: [TempFile.random_path_len]u8 = undefined;
         _ = std.fs.base64_encoder.encode(&random_path, &random_bytes);
 
         const abs_path = brk: {
-            var path_buf: std.Io.Writer.Allocating = .init(allocator);
+            var path_buf: std.Io.Writer.Allocating = .init(args.gpa);
             defer path_buf.deinit();
 
             try path_buf.writer.print("{s}{c}{s}_{s}{s}", .{
@@ -236,10 +243,10 @@ pub const TmpFile = struct {
         const sub_path = abs_path[args.tmp_dir.abs_path.len + 1 ..]; // +1 for sep
         const dir_path = abs_path[0..args.tmp_dir.abs_path.len];
 
-        const tmp_file = try args.tmp_dir.dir.createFile(sub_path, args.flags);
+        const tmp_file = try args.tmp_dir.dir.createFile(args.io, sub_path, args.flags);
 
         return .{
-            .allocator = allocator,
+            .allocator = args.gpa,
             .tmp_dir = args.tmp_dir,
             .owned_tmp_dir = args.owned_tmp_dir,
             .abs_path = abs_path,
@@ -258,24 +265,13 @@ pub const TmpFile = struct {
     }
 };
 
-/// module tmpDir will create tmp dir with std.heap.page_allocator, if need a custom allocator, can use TmpDir.init/TmpDir.initAlloc
-pub inline fn tmpDir(args: TmpDir.TmpDirArgs) !TmpDir {
-    const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
-    return TmpDir.init(allocator, args);
-}
-
-/// module tmpDirOwned will create tmp dir with std.heap.page_allocator and is owned by user
-pub inline fn tmpDirOwned(args: TmpDir.TmpDirArgs) !*TmpDir {
-    const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
-    return TmpDir.initOwned(allocator, args);
-}
-
 /// module tmpFile will create tmp file with std.heap.page_allocator, if need a custom allocator, can use TmpFile.init/TmpFile.initAlloc
 /// this method allows to omit args.tmp_dir. If so, it will create a TmpDir owned by returned TmpFile
 pub inline fn tmpFile(args: struct {
     io: std.Io,
     gpa: std.mem.Allocator,
-    tmp_dir: ?*TmpDir = null,
+    env: std.process.Environ.Map,
+    tmp_dir: ?TmpDir = null,
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
@@ -283,7 +279,9 @@ pub inline fn tmpFile(args: struct {
     dir_opts: std.Io.Dir.OpenOptions = .{},
 }) !TmpFile {
     if (args.tmp_dir) |tmp_dir| {
-        return TmpFile.init(args.gpa, .{
+        return TmpFile.init(.{
+            .io = args.io,
+            .gpa = args.gpa,
             .tmp_dir = tmp_dir,
             .owned_tmp_dir = false,
             .prefix = args.prefix,
@@ -293,13 +291,16 @@ pub inline fn tmpFile(args: struct {
             .dir_opts = args.dir_opts,
         });
     } else {
-        var tmp_dir = try tmpDirOwned(.{
+        const tmp_dir = try TmpDir.init(.{
             .io = args.io,
+            .gpa = args.gpa,
+            .env = args.env,
             .prefix = args.prefix,
             .opts = args.dir_opts,
         });
-        _ = &tmp_dir;
-        return TmpFile.init(args.gpa, .{
+        return TmpFile.init(.{
+            .io = args.io,
+            .gpa = args.gpa,
             .tmp_dir = tmp_dir,
             .owned_tmp_dir = true,
             .prefix = args.prefix,
@@ -313,16 +314,21 @@ pub inline fn tmpFile(args: struct {
 /// module tmpFileOwned will create tmp file with std.heap.page_allocator and is owned by user
 pub inline fn tmpFileOwned(args: struct {
     io: std.Io,
-    tmp_dir: ?*TmpDir = null,
+    gpa: std.mem.Allocator,
+    env: std.process.Environ.Map,
+    tmp_dir: ?TmpDir = null,
     prefix: ?[]const u8 = null,
+    suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
-    flags: std.fs.File.CreateFlags = .{ .read = true },
-    dir_opts: std.fs.Dir.OpenOptions = .{},
+    flags: std.Io.File.CreateFlags = .{ .read = true },
+    dir_opts: std.Io.Dir.OpenOptions = .{},
 }) !*TmpFile {
     const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;
     const tmp_file = try allocator.create(TmpFile);
     tmp_file.* = try tmpFile(.{
         .io = args.io,
+        .gpa = args.gpa,
+        .env = args.env,
         .tmp_dir = args.tmp_dir,
         .prefix = args.prefix,
         .dir_prefix = args.dir_prefix,
@@ -333,27 +339,32 @@ pub inline fn tmpFileOwned(args: struct {
 }
 
 test "Tmp" {
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(std.testing.allocator);
+    defer env_map.deinit();
     {
-        var tmp_file = try ThisModule.tmpFile(.{
-            .io = std.testing.io,
+        var tmp_file = try TempFile.tmpFile(.{
+            .io = io,
             .gpa = std.testing.allocator,
+            .env = env_map,
         });
-        defer tmp_file.deinit();
-        try tmp_file.f.writeAll("hello, world!");
-        try tmp_file.f.seekTo(0);
+        defer tmp_file.deinit(io);
+        try tmp_file.f.writePositionalAll(io, "hello, world!", 0);
         var buf: [4096]u8 = undefined;
         var tmp_reader = tmp_file.f.reader(io, &buf);
         try tmp_reader.interface.fillMore();
         try testing.expectEqual(tmp_reader.interface.bufferedLen(), "hello, world!".len);
         try testing.expectEqualSlices(u8, buf[0..tmp_reader.interface.bufferedLen()], "hello, world!");
 
-        var tmp_file2 = try ThisModule.tmpFile(.{
+        var tmp_file2 = try TempFile.tmpFile(.{
             .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
         });
 
-        defer tmp_file2.deinit();
-        try tmp_file2.f.writeAll("hello, world!2");
-        try tmp_file2.f.seekTo(0);
+        defer tmp_file2.deinit(io);
+        try tmp_file2.f.writePositionalAll(io, "hello, world!2", 0);
+
         var tmp_reader2 = tmp_file2.f.reader(io, &buf);
         try tmp_reader2.interface.fillMore();
 
@@ -362,32 +373,36 @@ test "Tmp" {
     }
 
     {
-        var tmp_dir = try ThisModule.tmpDirOwned(.{});
-        defer {
-            tmp_dir.deinit();
-            tmp_dir.allocator.destroy(tmp_dir);
-        }
-
-        var tmp_file = try ThisModule.tmpFile(.{
+        var tmp_dir = try TempFile.TmpDir.init(.{
             .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
+        });
+
+        defer tmp_dir.deinit(io);
+
+        var tmp_file = try TempFile.tmpFile(.{
+            .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
             .tmp_dir = tmp_dir,
         });
-        defer tmp_file.deinit();
-        try tmp_file.f.writeAll("hello, world!");
-        try tmp_file.f.seekTo(0);
+        defer tmp_file.deinit(io);
+        try tmp_file.f.writePositionalAll(io, "hello, world!", 0);
         var buf: [4096]u8 = undefined;
         var tmp_reader = tmp_file.f.reader(io, &buf);
         try tmp_reader.interface.fillMore();
         try testing.expectEqual(tmp_reader.interface.bufferedLen(), "hello, world!".len);
         try testing.expectEqualSlices(u8, tmp_reader.interface.buffered(), "hello, world!");
 
-        var tmp_file2 = try ThisModule.tmpFile(.{
+        var tmp_file2 = try TempFile.tmpFile(.{
             .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
             .tmp_dir = tmp_dir,
         });
-        defer tmp_file2.deinit();
-        try tmp_file2.f.writeAll("hello, world!2");
-        try tmp_file2.f.seekTo(0);
+        defer tmp_file2.deinit(io);
+        try tmp_file2.f.writePositionalAll(io, "hello, world!2", 0);
         var tmp_reader2 = tmp_file2.f.reader(io, &buf);
         try tmp_reader2.interface.fillMore();
 
@@ -396,16 +411,14 @@ test "Tmp" {
     }
 
     {
-        var tmp_file = try ThisModule.tmpFileOwned(.{
+        var tmp_file = try TempFile.tmpFileOwned(.{
             .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
         });
-        defer {
-            tmp_file.deinit();
-            tmp_file.allocator.destroy(tmp_file);
-        }
+        defer tmp_file.deinit(io);
 
-        try tmp_file.f.writeAll("hello, world!");
-        try tmp_file.f.seekTo(0);
+        try tmp_file.f.writePositionalAll(io, "hello, world!", 0);
         var buf: [4096]u8 = undefined;
         var tmp_reader = tmp_file.f.reader(io, &buf);
         try tmp_reader.interface.fillMore();
@@ -414,14 +427,14 @@ test "Tmp" {
 
     {
         // close file handle and later deinit should work too
-        var tmp_file = try ThisModule.tmpFile(.{
+        var tmp_file = try TempFile.tmpFile(.{
             .io = io,
+            .gpa = std.testing.allocator,
+            .env = env_map,
         });
-        defer {
-            tmp_file.deinit();
-        }
+        defer tmp_file.deinit(io);
 
-        try tmp_file.f.writeAll("hello, world!");
-        tmp_file.close();
+        try tmp_file.f.writePositionalAll(io, "hello, world!", 0);
+        tmp_file.close(io);
     }
 }

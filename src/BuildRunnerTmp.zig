@@ -21,12 +21,15 @@ pub fn BuildRunnerTmp(T: type) type {
         temp: TempFile.TmpDir,
         runner: []const u8,
 
-        pub fn init(gpa: std.mem.Allocator, runner_file: []const u8) !Self {
-            var tempD = try TempFile.tmpDir(.{
+        pub fn init(ainit: std.process.Init, runner_file: []const u8) !Self {
+            var tempD = try TempFile.TmpDir.init(.{
+                .io = ainit.io,
+                .gpa = ainit.gpa,
+                .env = ainit.environ_map.*,
                 .prefix = "zigpkg",
             });
 
-            const runner = try std.fs.path.join(gpa, &.{
+            const runner = try std.fs.path.join(ainit.gpa, &.{
                 tempD.abs_path,
                 runner_file,
             });
@@ -43,9 +46,9 @@ pub fn BuildRunnerTmp(T: type) type {
                 .runner = runner,
             };
         }
-        pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-            self.temp.deinit();
-            gpa.free(self.runner);
+        pub fn deinit(self: *Self, ainit: std.process.Init) void {
+            self.temp.deinit(ainit.io);
+            ainit.gpa.free(self.runner);
         }
     };
 }
