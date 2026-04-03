@@ -185,8 +185,8 @@ pub fn cmd_extract(opt: GlobalOptions, args: []const []const u8) !u8 {
     }
     try pkg_extractor.process(.{
         .io = opt.init.io,
-        .gpa = opt.gpa,
-        .env = opt.env_map,
+        .gpa = opt.init.gpa,
+        .env = opt.init.env_map,
         .zig_exe = opt.zig_exe,
         .filepath = args[0],
         .root_out_dir = if (args.len == 1) null else args[1],
@@ -258,35 +258,36 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
     const output = args[0];
     const root = args[1];
 
+    const gpa = opt.init.gpa;
     const zon_src = try Manifest.cwdReadFileAllocZ(
         args[2],
-        opt.gpa,
+        gpa,
         std.math.maxInt(u32),
     );
-    defer opt.gpa.free(zon_src);
+    defer gpa.free(zon_src);
 
     const parsed = try zonparse.fromSliceAlloc(
         Serialize,
-        opt.gpa,
+        gpa,
         zon_src,
         null,
         .{},
     );
-    defer std.zon.parse.free(opt.gpa, parsed);
+    defer std.zon.parse.free(gpa, parsed);
 
     var cache_is_allocated = false;
-    const cache = if (opt.env_map.get(
+    const cache = if (opt.init.environ_map.get(
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
         const cp = try known_folders.getPath(
-            opt.io,
-            opt.gpa,
+            opt.init.io,
+            gpa,
             .cache,
         ) orelse return error.CacheNotFound;
-        defer opt.gpa.free(cp);
+        defer gpa.free(cp);
         cache_is_allocated = true;
         break :blk try std.fs.path.join(
-            opt.gpa,
+            gpa,
             &.{ cp, "zig" },
         );
     };
