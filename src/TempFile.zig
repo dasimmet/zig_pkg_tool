@@ -163,7 +163,7 @@ pub const TmpFile = struct {
         prefix: ?[]const u8 = null,
         suffix: ?[]const u8 = null,
         dir_prefix: ?[]const u8 = null,
-        flags: std.Io.File.CreateFlags = .{ .read = true },
+        flags: std.Io.Dir.CreateFileOptions = .{ .read = true },
         dir_opts: std.Io.Dir.OpenOptions = .{},
     };
 
@@ -274,7 +274,7 @@ pub inline fn tmpFile(args: struct {
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
-    flags: std.Io.File.CreateFlags = .{ .read = true },
+    flags: std.Io.Dir.CreateFileOptions = .{ .read = true },
     dir_opts: std.Io.Dir.OpenOptions = .{},
 }) !TmpFile {
     if (args.tmp_dir) |tmp_dir| {
@@ -319,7 +319,7 @@ pub inline fn tmpFileOwned(args: struct {
     prefix: ?[]const u8 = null,
     suffix: ?[]const u8 = null,
     dir_prefix: ?[]const u8 = null,
-    flags: std.Io.File.CreateFlags = .{ .read = true },
+    flags: std.Io.Dir.CreateFileOptions = .{ .read = true },
     dir_opts: std.Io.Dir.OpenOptions = .{},
 }) !*TmpFile {
     const allocator = if (builtin.is_test) std.testing.allocator else std.heap.page_allocator;

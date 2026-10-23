@@ -1,8 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const builtin = @import("builtin");
-const Manifest = @import("buildrunner/Manifest.zig");
-const Serialized = @import("buildrunner/BuildSerialize.zig");
+const Manifest = @import("Manifest.zig");
 const tar = std.tar;
 const flate = std.compress.flate;
 
@@ -98,11 +97,138 @@ pub fn main(init: std.process.Init) !void {
     });
 }
 
+pub fn collectDependencies(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    cache_root: []const u8,
+    dir_path: []const u8,
+    deps_map: *std.StringArrayHashMapUnmanaged([]const u8),
+) !void {
+    const cwd = std.Io.Dir.cwd();
+    const zon_path = try std.fs.path.join(gpa, &.{ dir_path, "build.zig.zon" });
+    defer gpa.free(zon_path);
+
+    const zon_src = cwd.readFileAllocOptions(
+        io,
+        zon_path,
+        gpa,
+        std.Io.Limit.limited(10 * 1024 * 1024),
+        std.mem.Alignment.@"1",
+        0,
+    ) catch |err| switch (err) {
+        error.FileNotFound => return,
+        else => return err,
+    };
+    defer gpa.free(zon_src);
+
+    const zon_srcZ = try gpa.dupeSentinel(u8, zon_src, 0);
+    defer gpa.free(zon_srcZ);
+
+    var diag: Manifest.ZonDiag = .{};
+    defer diag.deinit(gpa);
+
+    const manifest = Manifest.fromSliceAlloc(gpa, zon_srcZ, &diag) catch return;
+    defer manifest.deinit(gpa);
+
+    if (manifest.dependencies) |deps| {
+        var it = deps.iterator();
+        while (it.next()) |entry| {
+            const dep = entry.value_ptr.*;
+            if (dep.hash) |hash| {
+                if (deps_map.contains(hash)) continue;
+                const cache_p_dir = try std.fs.path.join(gpa, &.{ cache_root, "p", hash });
+                const cache_p_tar = try std.fmt.allocPrint(gpa, "{s}.tar.gz", .{cache_p_dir});
+
+                var found_path: ?[]const u8 = null;
+                if (cwd.openDir(io, cache_p_dir, .{})) |d| {
+                    d.close(io);
+                    found_path = cache_p_dir;
+                    gpa.free(cache_p_tar);
+                } else |_| {
+                    gpa.free(cache_p_dir);
+                    if (cwd.openFile(io, cache_p_tar, .{})) |f| {
+                        f.close(io);
+                        found_path = cache_p_tar;
+                    } else |_| {
+                        gpa.free(cache_p_tar);
+                    }
+                }
+
+                if (found_path) |fp| {
+                    const owned_hash = try gpa.dupe(u8, hash);
+                    try deps_map.put(gpa, owned_hash, fp);
+                    if (!std.mem.endsWith(u8, fp, ".tar.gz")) {
+                        try collectDependencies(io, gpa, cache_root, fp, deps_map);
+                    }
+                }
+            } else if (dep.path) |subpath| {
+                const sub_dir = try std.fs.path.join(gpa, &.{ dir_path, subpath });
+                defer gpa.free(sub_dir);
+                try collectDependencies(io, gpa, cache_root, sub_dir, deps_map);
+            }
+        }
+    }
+}
+
+fn appendTarGzToArchive(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    archive: *std.tar.Writer,
+    archive_prefix: []const u8,
+    tar_gz_path: []const u8,
+) !void {
+    const cwd = std.Io.Dir.cwd();
+    var file = try cwd.openFile(io, tar_gz_path, .{});
+    defer file.close(io);
+
+    var fbuf: [8192]u8 = undefined;
+    var freader = file.reader(io, &fbuf);
+
+    var flate_buffer: [flate.max_window_len]u8 = undefined;
+    var gz = flate.Decompress.init(
+        &freader.interface,
+        .gzip,
+        &flate_buffer,
+    );
+
+    var file_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var it: std.tar.Iterator = .init(&gz.reader, .{
+        .file_name_buffer = &file_name_buffer,
+        .link_name_buffer = &link_name_buffer,
+    });
+
+    while (try it.next()) |entry| {
+        var name = entry.name;
+        if (std.mem.indexOfScalar(u8, name, '/')) |slash| {
+            name = name[slash + 1 ..];
+        }
+        if (name.len == 0) continue;
+
+        const full_path = try std.fs.path.join(gpa, &.{ archive_prefix, name });
+        defer gpa.free(full_path);
+
+        try archive.setRoot("");
+        switch (entry.kind) {
+            .file => {
+                try archive.writeFileStream(full_path, entry.size, it.reader, .{ .mode = entry.mode });
+            },
+            .directory => {
+                try archive.writeDir(full_path, .{ .mode = entry.mode });
+            },
+            .sym_link => {
+                try archive.writeLink(full_path, entry.link_name, .{ .mode = entry.mode });
+            },
+        }
+        it.unread_file_bytes = 0;
+    }
+}
+
 /// convert a std.Build zon to a tar.gz archive
 pub fn fromBuild(
     io: std.Io,
     gpa: std.mem.Allocator,
-    build: Serialized,
+    zon_src: []const u8,
     cache_root: []const u8,
     root: []const u8,
     out_path: []const u8,
@@ -121,49 +247,28 @@ pub fn fromBuild(
         fs_paths.deinit();
     }
 
-    for (build.dependencies, 0..) |dep, i| {
-        if (i == 0) {
-            std.debug.assert(dep.location == .root);
-            try tar_paths.append(try gpa.dupe(u8, "build/root"));
-            try fs_paths.append(try gpa.dupe(u8, root));
-            var zon_file = std.Io.Writer.Allocating.init(gpa);
-            try zon_file.writer.writeAll("raw:");
-            try std.zon.stringify.serialize(build, .{
-                .whitespace = true,
-                .emit_default_optional_fields = false,
-            }, &zon_file.writer);
+    // 1. Add root
+    try tar_paths.append(try gpa.dupe(u8, "build/root"));
+    try fs_paths.append(try gpa.dupe(u8, root));
 
-            try tar_paths.append(try gpa.dupe(u8, "build/root.zon"));
-            try fs_paths.append(try zon_file.toOwnedSlice());
-        } else {
-            switch (dep.location) {
-                .root => {
-                    std.log.err("unexpected root dep: {any}", .{dep});
-                    return error.Unexpected;
-                },
-                .cache => {
-                    const fs_p = try std.fs.path.join(
-                        gpa,
-                        &.{ cache_root, "p", dep.name },
-                    );
+    // 2. Add root.zon
+    const raw_zon = try std.fmt.allocPrint(gpa, "raw:{s}", .{zon_src});
+    try tar_paths.append(try gpa.dupe(u8, "build/root.zon"));
+    try fs_paths.append(raw_zon);
 
-                    const tar_p = try std.fmt.allocPrint(
-                        gpa,
-                        "build/p/{s}",
-                        .{dep.name},
-                    );
+    // 3. Collect dependencies from root and cache
+    var deps_map: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
+    defer {
+        for (deps_map.keys()) |k| gpa.free(k);
+        for (deps_map.values()) |v| gpa.free(v);
+        deps_map.deinit(gpa);
+    }
+    try collectDependencies(io, gpa, cache_root, root, &deps_map);
 
-                    try tar_paths.append(tar_p);
-                    try fs_paths.append(fs_p);
-                },
-                .root_sub => {},
-                .cache_sub => {},
-                .unknown => {
-                    std.log.err("unknown dep: {any}", .{dep});
-                    return error.Unexpected;
-                },
-            }
-        }
+    for (deps_map.keys(), deps_map.values()) |hash, fs_p| {
+        const tar_p = try std.fmt.allocPrint(gpa, "build/p/{s}", .{hash});
+        try tar_paths.append(tar_p);
+        try fs_paths.append(try gpa.dupe(u8, fs_p));
     }
 
     return process(.{
@@ -219,6 +324,11 @@ pub fn process(opt: Options) !void {
 
         if (std.mem.startsWith(u8, fs_path, "raw:")) {
             try archive.writeFileBytes(archive_path, fs_path["raw:".len..], .{});
+            continue;
+        }
+
+        if (std.mem.endsWith(u8, fs_path, ".tar.gz")) {
+            try appendTarGzToArchive(opt.io, opt.gpa, &archive, archive_path, fs_path);
             continue;
         }
 

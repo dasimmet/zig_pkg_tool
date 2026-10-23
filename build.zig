@@ -1,22 +1,13 @@
 const std = @import("std");
-// const zon = @import("build.zig.zon");
-const Serialize = @import("src/buildrunner/BuildSerialize.zig");
 
 pub fn build(b: *std.Build) void {
-    const update_bsb = b.addUpdateSourceFiles();
-    const bs_boring = Serialize.serializeBuildOrPanic(b, .{
-        .whitespace = true,
-        .emit_default_optional_fields = false,
-    });
-    update_bsb.addBytesToSource(bs_boring, "build.boring.tree.zon");
-
     const target = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});
 
     const deppkg_step = b.step("deppkg", "create .tar.gz packages of dependencies");
     const depPkgArc = depPackagesInternal(b, b, .{
         .name = "depkg",
-        .opt = .Debug,
+        .opt = .debug,
     });
     const depPkgInstall = b.addInstallFile(
         depPkgArc,
@@ -25,11 +16,13 @@ pub fn build(b: *std.Build) void {
     b.default_step.dependOn(&depPkgInstall.step);
     deppkg_step.dependOn(&depPkgInstall.step);
 
-    _ = b.addModule("zigpkg", .{
+    const zigpkg_mod = b.addModule("zigpkg", .{
         .root_source_file = b.path("src/zigpkg.zig"),
         .target = target,
         .optimize = opt,
     });
+    const known_folders = b.dependency("known_folders", .{}).module("known-folders");
+    zigpkg_mod.addImport("known-folders", known_folders);
 
     const zigpkg = build_zigpkg(b, target, opt);
     b.installArtifact(zigpkg);
@@ -38,7 +31,7 @@ pub fn build(b: *std.Build) void {
     const zigpkg_run = b.addRunArtifact(zigpkg);
     zigRunEnv(b, zigpkg_run);
 
-    if (b.args) |args| zigpkg_run.addArgs(args);
+    zigpkg_run.addPassthruArgs();
     b.step("zigpkg", "zigpkg cli").dependOn(&zigpkg_run.step);
 
     const tests = b.addTest(.{
@@ -60,24 +53,25 @@ pub fn build(b: *std.Build) void {
 
     b.step("fmt", "format source code").dependOn(&b.addFmt(.{
         .paths = &.{
-            "build.zig",
-            "build.zig.zon",
-            "src",
-            "example/build.zig",
-            "example/build.zig.zon",
-            "example/src",
+            b.path("build.zig"),
+            b.path("build.zig.zon"),
+            b.path("src"),
+            b.path("example/build.zig"),
+            b.path("example/build.zig.zon"),
+            b.path("example/src"),
         },
     }).step);
 
+    const print_cfg_cmd = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "--print-configuration",
+    });
+    const tree_zon = print_cfg_cmd.captureStdOut(.{});
     const update_bs = b.addUpdateSourceFiles();
+    update_bs.addCopyFileToSource(tree_zon, "build.tree.zon");
     const update_bs_step = b.step("update-build-tree", "update build.tree.zon");
     update_bs_step.dependOn(&update_bs.step);
-    update_bs_step.dependOn(&update_bsb.step);
-    const bs = Serialize.serializeBuildOrPanic(b, .{
-        .whitespace = true,
-        .emit_default_optional_fields = false,
-    });
-    update_bs.addBytesToSource(bs, "build.tree.zon");
 }
 
 pub fn svgGraph(b: *std.Build, dotgraph: std.Build.LazyPath) std.Build.LazyPath {
@@ -102,7 +96,7 @@ fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []
     dotgraph.setName("dot generation");
     dotgraph.addArgs(&.{
         "dotall",
-        b.build_root.path.?,
+        b.root.root_dir.path orelse ".",
     });
     zigRunEnv(b, dotgraph);
 
@@ -112,21 +106,12 @@ fn dotGraphStepInternal(b: *std.Build, zigpkg: *std.Build.Step.Compile, args: []
 
 fn zigRunEnv(b: *std.Build, run: *std.Build.Step.Run) void {
     run.setEnvironmentVariable("ZIG", b.graph.zig_exe);
-    if (b.graph.zig_lib_directory.path) |lib_dir| {
-        run.setEnvironmentVariable("ZIG_LIB_DIR", lib_dir);
-    }
-    if (b.cache_root.path) |cache_root| {
-        run.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", cache_root);
-    }
-    if (b.graph.global_cache_root.path) |cache_root| {
-        run.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", cache_root);
-    }
 }
 
 pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.builtin.OptimizeMode) *std.Build.Step.Compile {
     const zigpkg = b.addExecutable(.{
         .name = "zigpkg",
-        .root_module = b.addModule("zigpkg", .{
+        .root_module = b.createModule(.{
             .root_source_file = b.path("src/zigpkg.zig"),
             .target = target,
             .optimize = opt,
@@ -141,7 +126,7 @@ pub fn build_zigpkg(b: *std.Build, target: std.Build.ResolvedTarget, opt: std.bu
 
 pub const DepPackageOptions = struct {
     name: []const u8,
-    opt: std.builtin.OptimizeMode = .ReleaseSafe,
+    opt: std.builtin.OptimizeMode = .safe,
 };
 
 pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
@@ -150,12 +135,12 @@ pub fn depPackagesStep(b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath
 }
 
 fn depPackagesInternal(b: *std.Build, this_b: *std.Build, opt: DepPackageOptions) std.Build.LazyPath {
-    const zon_source = Serialize.serializeBuild(b, .{
-        .whitespace = false,
-        .emit_default_optional_fields = false,
-    }) catch @panic("Build Serialize");
-    const wf = b.addWriteFiles();
-    const zon_file = wf.add("buildgraph.zon", zon_source);
+    const print_cfg_cmd = b.addSystemCommand(&.{
+        b.graph.zig_exe,
+        "build",
+        "--print-configuration",
+    });
+    const zon_file = print_cfg_cmd.captureStdOut(.{});
     const out_basename = b.fmt("{s}{s}", .{ opt.name, ".tar.gz" });
 
     const zigpkg = build_zigpkg(
@@ -170,7 +155,7 @@ fn depPackagesInternal(b: *std.Build, this_b: *std.Build, opt: DepPackageOptions
         "from-zon",
     });
     const out_file = run.addOutputFileArg(out_basename);
-    run.addArg(b.build_root.path.?);
+    run.addArg(b.root.root_dir.path orelse ".");
     run.addFileArg(zon_file);
     return out_file;
 }

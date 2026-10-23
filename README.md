@@ -2,17 +2,12 @@
 
 a command line tool to work with `build.zig` dependencies and build graphs.
 
-It embeds custom build runners to retrieve build graph information,
+It uses `zig build --print-configuration` to retrieve build graph information,
 used to backup dependencies, output a graphviz `dot` file etc.
 
-The repo vendors zig's `build-runner.zig` with an inserted hook
-to serialize the `std.Build` struct to `zon` and send it from the subpocess stdout
-back to `zigpkg`.
 Then that information is used to perform operations based on the build graph.
 
-It is compatible and requires with `zig >= 0.14.0` at runtime, when zig master
-starts making changes to the build runner the vendored runner needs to be versioned
-inside this tool.
+It is compatible with `zig >= 0.17.0`.
 
 ## Usage
 
@@ -29,7 +24,7 @@ available subcommands:
   dot     rerun "zig build" and output a graphviz ".dot" file of build steps based on args
   dotall  rerun "zig build" and output a graphviz ".dot" file of all build steps
   dothtml "dotall", but output html for vis.js instead of ".dit"
-  zon     rerun "zig build" with a custom build runner and output the build graph as .zon to stdout
+  zon     rerun "zig build" and output the build graph as .zon to stdout
   json    same as "zon" but output json
   deppkg  more subcommands for creating and working with "deppkg.tar.gz" files. storing all
           stores all dependencies of a directory containing build.zig.zon in a .tar.gz archive
@@ -79,7 +74,7 @@ pub const default_ignores: []const []const u8 = &.{
 
 ## Graphviz dependency graph
 
-this executes `zig build` with a custom build runner (including potiential additional arguments),
+this executes `zig build --print-configuration` (including potential additional arguments),
 to convert the `Build.Step` graph to basic graphviz `dot` code.
 that can be easily be converted to the svg form.
 For now, generated dot strings are not escaped and might break.

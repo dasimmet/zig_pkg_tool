@@ -53,6 +53,7 @@ pub fn process(opt: Options) !void {
         var vit = temp.valueIterator();
         while (vit.next()) |a| {
             opt.gpa.free(a.hash);
+            a.tf.deinit(opt.io);
         }
         temp.deinit();
     }
