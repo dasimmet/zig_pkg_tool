@@ -1,9 +1,22 @@
 const std = @import("std");
+const runner_zig = @import("runner-zig.zig");
 pub const root = @import("@build");
 pub const dependencies = @import("@dependencies");
 
-pub fn main() !void {
-    return try @import("runner-zig.zig").runner.mainBuild(.{
+pub const main = if (runner_zig.later_than_zig_15)
+    main_16
+else
+    main_legacy;
+
+fn main_16(init: std.process.Init.Minimal) !void {
+    return try runner_zig.runner.mainBuild(init, .{
+        .executeBuildFn = build_main,
+        .ctx = null,
+    });
+}
+
+fn main_legacy() !void {
+    return try runner_zig.runner.mainBuild(.{
         .executeBuildFn = build_main,
         .ctx = null,
     });
@@ -11,8 +24,20 @@ pub fn main() !void {
 
 pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) !void {
     _ = ctx;
-    var stdout_file = std.fs.File.stdout().writer(&.{});
-    const stdout = &stdout_file.interface;
+    if (runner_zig.later_than_zig_15) {
+        var stdout_buf: [8192]u8 = undefined;
+        var stdout_file = std.Io.File.stdout().writer(b.graph.io, &stdout_buf);
+        const stdout = &stdout_file.interface;
+        try writeDot(b, targets, stdout);
+        try stdout.flush();
+    } else {
+        var stdout_file = std.fs.File.stdout().writer(&.{});
+        const stdout = &stdout_file.interface;
+        try writeDot(b, targets, stdout);
+    }
+}
+
+fn writeDot(b: *std.Build, targets: []const []const u8, stdout: anytype) !void {
     try stdout.writeAll(DotFileWriter.header);
     var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa_alloc.deinit();

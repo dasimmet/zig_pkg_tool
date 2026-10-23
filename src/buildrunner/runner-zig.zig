@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 // changes to readFileAllocOptions after this
-const later_than_zig_14 = std.mem.containsAtLeastScalar(std.math.Order, &.{
+pub const later_than_zig_14 = std.mem.containsAtLeastScalar(std.math.Order, &.{
     .gt,
     .eq,
 }, 1, builtin.zig_version.order(
@@ -10,7 +10,7 @@ const later_than_zig_14 = std.mem.containsAtLeastScalar(std.math.Order, &.{
 ));
 
 // changes to readFileAllocOptions after this
-const later_than_zig_15 = std.mem.containsAtLeastScalar(std.math.Order, &.{
+pub const later_than_zig_15 = std.mem.containsAtLeastScalar(std.math.Order, &.{
     .gt,
     .eq,
 }, 1, builtin.zig_version.order(
