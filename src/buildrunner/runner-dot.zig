@@ -39,10 +39,8 @@ pub fn build_main(b: *std.Build, targets: []const []const u8, ctx: ?*anyopaque) 
 
 fn writeDot(b: *std.Build, targets: []const []const u8, stdout: anytype) !void {
     try stdout.writeAll(DotFileWriter.header);
-    var gpa_alloc = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa_alloc.deinit();
 
-    var dotfile: DotFileWriter = .init(gpa_alloc.allocator());
+    var dotfile: DotFileWriter = .init(b.allocator);
     defer dotfile.deinit();
 
     if (targets.len == 0) {
