@@ -1,27 +1,21 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
+const std = @import("std");
+const lib = @import("example_lib");
 
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.Io.getStdErr()`)
+pub fn main(init: std.process.Init) !void {
     std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.Io.getStdOut().writer();
-    var bw = std.Io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var stdout_buf: [128]u8 = undefined;
+    var stdout_file = std.Io.File.stdout().writer(init.io, &stdout_buf);
+    const stdout = &stdout_file.interface;
 
     try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // Don't forget to flush!
+    try stdout.flush();
 }
 
 test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
+    var list: std.ArrayList(i32) = .empty;
+    defer list.deinit(std.testing.allocator);
+    try list.append(std.testing.allocator, 42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
 
@@ -31,16 +25,12 @@ test "use other module" {
 
 test "fuzz example" {
     const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
+        fn testOne(context: @This(), smith: *std.testing.Smith) anyerror!void {
             _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
+            var buf: [64]u8 = undefined;
+            const input = buf[0..smith.slice(&buf)];
             try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
         }
     };
     try std.testing.fuzz(Context{}, Context.testOne, .{});
 }
-
-const std = @import("std");
-
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("example_lib");
