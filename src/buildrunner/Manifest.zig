@@ -58,7 +58,7 @@ pub const ManifestFile = struct {
         };
     }
     fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-        self.manifest.deinit();
+        self.manifest.deinit(allocator);
         allocator.free(self.path);
         allocator.free(self.source);
     }
@@ -97,8 +97,8 @@ pub const ManifestFile = struct {
                         var child: ManifestFile = .{
                             .path = zon_path,
                             .source = try cwdReadFileAllocZ(
-                                self.gpa,
                                 zon_path,
+                                self.gpa,
                                 std.math.maxInt(u32),
                             ),
                             .manifest = undefined,

@@ -147,7 +147,7 @@ pub const TmpDir = struct {
     /// init a tmpdir but from heap, the struct is owned by user, and need to be destory later by user too
     pub inline fn initOwned(allocator: std.mem.Allocator, args: TmpDirArgs) !*TmpDir {
         const tmp_dir = try allocator.create(TmpDir);
-        tmp_dir.* = try TmpDir.init(allocator, args);
+        tmp_dir.* = try TmpDir.init(args);
         return tmp_dir;
     }
 };
@@ -186,7 +186,6 @@ pub const TmpFile = struct {
         defer {
             if (self.owned_tmp_dir) {
                 self.tmp_dir.deinit(io);
-                self.allocator.destroy(self.tmp_dir);
                 self.tmp_dir = undefined;
                 self.owned_tmp_dir = false;
             }
@@ -260,7 +259,7 @@ pub const TmpFile = struct {
     /// init a tmp file with struct created from heap, user must release the struct
     pub inline fn initOwned(allocator: std.mem.Allocator, args: TmpFileArgs) !*TmpFile {
         const tmp_file = try allocator.create(TmpFile);
-        tmp_file.* = try TmpFile.init(allocator, args);
+        tmp_file.* = try TmpFile.init(args);
         return tmp_file;
     }
 };
@@ -416,7 +415,10 @@ test "Tmp" {
             .gpa = std.testing.allocator,
             .env = env_map,
         });
-        defer tmp_file.deinit(io);
+        defer {
+            tmp_file.deinit(io);
+            std.testing.allocator.destroy(tmp_file);
+        }
 
         try tmp_file.f.writePositionalAll(io, "hello, world!", 0);
         var buf: [4096]u8 = undefined;

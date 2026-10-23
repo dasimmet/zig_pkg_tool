@@ -223,29 +223,30 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
         args[arg_sep..],
         Serialize,
     );
-    defer serialized_b.deinit(opt.gpa);
+    defer serialized_b.deinit(opt.init.gpa);
 
     var cache_is_allocated = false;
-    const cache = if (opt.env_map.get(
+    const cache = if (opt.init.environ_map.get(
         "ZIG_GLOBAL_CACHE_DIR",
     )) |dir| dir else blk: {
         const cp = try known_folders.getPath(
-            opt.io,
-            opt.gpa,
+            opt.init.io,
+            opt.init.gpa,
+            opt.init.environ_map,
             .cache,
         ) orelse return error.CacheNotFound;
-        defer opt.gpa.free(cp);
+        defer opt.init.gpa.free(cp);
         cache_is_allocated = true;
         break :blk try std.fs.path.join(
-            opt.gpa,
+            opt.init.gpa,
             &.{ cp, "zig" },
         );
     };
-    defer if (cache_is_allocated) opt.gpa.free(cache);
+    defer if (cache_is_allocated) opt.init.gpa.free(cache);
 
     try pkg_targz.fromBuild(
-        opt.io,
-        opt.gpa,
+        opt.init.io,
+        opt.init.gpa,
         serialized_b.parsed,
         cache,
         root,
@@ -282,7 +283,7 @@ pub fn cmd_from_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
         const cp = try known_folders.getPath(
             opt.init.io,
             gpa,
-            opt.init.environ_map.*,
+            opt.init.environ_map,
             .cache,
         ) orelse return error.CacheNotFound;
         defer gpa.free(cp);
@@ -370,7 +371,7 @@ pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !u8 {
         args[arg_sep..],
         Serialize,
     );
-    defer serialized_b.deinit(opt.gpa);
+    defer serialized_b.deinit(opt.init.gpa);
     try opt.stdout.writeAll(dot.DotFileWriter.header);
     for (serialized_b.parsed.steps.?, 0..) |step, step_id| {
         // const label = dot.buildRootEscaped(opt.zig_exe, build_root: []const u8, dep_root: []const u8, gpa: std.mem.Allocator)
@@ -405,7 +406,7 @@ pub fn cmd_dotall(opt: GlobalOptions, args: []const []const u8) !u8 {
 
 pub fn cmd_dothtml(opt: GlobalOptions, args: []const []const u8) !u8 {
     const b = try zonOutputCmd(opt, args);
-    defer b.deinit(opt.gpa);
+    defer b.deinit(opt.init.gpa);
 
     try viz_network.render(b.parsed, opt.stdout);
     return 0;
@@ -424,7 +425,7 @@ pub fn cmd_json(opt: GlobalOptions, args: []const []const u8) !u8 {
         return 0;
     }
     const b = try zonOutputCmd(opt, args);
-    defer b.deinit(opt.gpa);
+    defer b.deinit(opt.init.gpa);
 
     try opt.stdout.print("{f}\n", .{
         std.json.fmt(b.parsed, .{
@@ -447,7 +448,7 @@ pub fn cmd_zon(opt: GlobalOptions, args: []const []const u8) !u8 {
         return 0;
     }
     const b = try zonOutputCmd(opt, args);
-    defer b.deinit(opt.gpa);
+    defer b.deinit(opt.init.gpa);
 
     try std.zon.stringify.serialize(b.parsed, .{
         .whitespace = true,
@@ -512,13 +513,11 @@ pub fn runZonStdoutCommand(
     });
     try argv.appendSlice(gpa, args);
 
-    const term = std.process.Child.run(.{
+    const term = std.process.run(gpa, opt.init.io, .{
         .argv = argv.items,
-        .allocator = gpa,
-        .cwd = root,
-        .env_map = &opt.init.env_map,
+        .cwd = .{ .path = root },
+        .environ_map = opt.init.environ_map,
         .expand_arg0 = .expand,
-        .max_output_bytes = std.math.maxInt(u32),
     }) catch |err| {
         std.log.err("Subprocess error: {}\nArgv: {f}", .{
             err,
@@ -534,12 +533,12 @@ pub fn runZonStdoutCommand(
         }
         return err;
     };
-    defer opt.gpa.free(term.stdout);
-    defer opt.gpa.free(term.stderr);
+    defer gpa.free(term.stdout);
+    defer gpa.free(term.stderr);
     try opt.stderr.writeAll(term.stderr);
 
     switch (term.term) {
-        .Exited => |ex| {
+        .exited => |ex| {
             if (ex != 0) {
                 try opt.stderr.print("subprocess exitcode: {d}\n", .{ex});
                 return error.ExitCode;
@@ -551,35 +550,36 @@ pub fn runZonStdoutCommand(
         },
     }
 
-    const my_src = try opt.gpa.dupeZ(u8, term.stdout);
-    errdefer opt.gpa.free(my_src);
+    const my_src = try gpa.dupeZ(u8, term.stdout);
+    errdefer gpa.free(my_src);
 
     return .{
-        .parsed = try zonparse.fromSliceAlloc(T, opt.gpa, my_src, null, .{}),
+        .parsed = try zonparse.fromSliceAlloc(T, gpa, my_src, null, .{}),
         .source = my_src,
     };
 }
 
 pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, args: []const []const u8) !void {
+    const gpa = opt.init.gpa;
     var buildrunner: BuildRunnerTmp.Embedded = try .init(opt.init, runner);
-    defer buildrunner.deinit(opt.gpa);
+    defer buildrunner.deinit(opt.init);
 
     var argv = std.ArrayList([]const u8).empty;
-    defer argv.deinit(opt.gpa);
-    try argv.appendSlice(opt.gpa, &.{
+    defer argv.deinit(gpa);
+    try argv.appendSlice(gpa, &.{
         opt.zig_exe, "build", "--build-runner", buildrunner.runner,
     });
-    try argv.appendSlice(opt.gpa, args);
+    try argv.appendSlice(gpa, args);
 
-    var proc = std.process.Child.init(argv.items, opt.gpa);
-    proc.stdin_behavior = .Inherit;
-    proc.stdout_behavior = .Inherit;
-    proc.stderr_behavior = .Inherit;
-    proc.cwd = root;
-    proc.env_map = &opt.env_map;
-    proc.expand_arg0 = .expand;
-
-    const term = proc.spawnAndWait() catch |err| {
+    var child = std.process.spawn(opt.init.io, .{
+        .argv = argv.items,
+        .cwd = .{ .path = root },
+        .environ_map = opt.init.environ_map,
+        .expand_arg0 = .expand,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    }) catch |err| {
         std.log.err("Subprocess error: {}\nArgv: {f}", .{ err, std.json.fmt(argv.items, .{ .whitespace = .minified }) });
         switch (err) {
             error.FileNotFound => {
@@ -589,8 +589,13 @@ pub fn runnerCommand(opt: GlobalOptions, runner: []const u8, root: []const u8, a
         }
         return err;
     };
+
+    const term = child.wait(opt.init.io) catch |err| {
+        std.log.err("Wait error: {}", .{err});
+        return err;
+    };
     switch (term) {
-        .Exited => |ex| {
+        .exited => |ex| {
             if (ex != 0) {
                 try opt.stderr.print("subprocess exitcode: {d}\n", .{ex});
                 return error.ExitCode;

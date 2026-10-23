@@ -2,11 +2,11 @@
     .name = .pkg_tool,
     .version = "0.0.0",
     .fingerprint = 0xeec6d0d326821008,
-    .minimum_zig_version = "0.16.0-dev.3066+da78940dd",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .known_folders = .{
-            .url = "git+https://github.com/ziglibs/known-folders.git#175f5596b3d2ee3c658282bb07885580895a0e73",
-            .hash = "known_folders-0.0.0-Fy-PJk7KAAC41mQXzmFyGa0Q7tvmQjatENkREa6Gc4zu",
+            .url = "git+https://github.com/ziglibs/known-folders#6da0d0c41b78b9ed2d34fa364fcb81b5ebece6c4",
+            .hash = "known_folders-0.0.0-Fy-PJiDLAAB98m3uYUzatrTb2mO2fpvwx2zpSroEtfbO",
         },
     },
     .paths = .{
