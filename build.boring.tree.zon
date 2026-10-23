@@ -2,37 +2,17 @@
     .options = .{ .available = .{}, .user_input = .{} },
     .verbose = false,
     .release_mode = .off,
-    .dependencies = .{
-        .{
-            .name = "zig_pkg_tool",
-            .location = .root,
-            .edges = 0,
-            .minimum_zig_version = "0.15.1",
-        },
-        .{
-            .name = "known_folders-0.0.0-Fy-PJkfRAAAVdptXWXBspIIC7EkVgLgWozU5zIk5Zgcy",
-            .location = .cache,
-            .minimum_zig_version = "0.14.0",
-        },
-        .{
-            .name = "zlib-1.3.1-ZZQ7lVw3AADpAS5B9-0I91RwGLOrX5ybyirsIyrEO6nb",
-            .location = .cache,
-            .minimum_zig_version = "0.15.1",
-        },
-        .{
-            .name = "N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o",
-            .location = .cache,
-            .edges = 3,
-            .minimum_zig_version = null,
-        },
-    },
-    .dependency_edges = .{
-        .{ .name = "known_folders", .id = 1 },
-        .{ .name = "zlib", .id = 2 },
-        null,
-        .{ .name = "zlib", .id = 3 },
-        null,
-    },
+    .dependencies = .{ .{
+        .name = "zig_pkg_tool",
+        .location = .root,
+        .edges = 0,
+        .minimum_zig_version = "0.16.0",
+    }, .{
+        .name = "zig_pkg_tool/zig-pkg/known_folders-0.0.0-Fy-PJiDLAAB98m3uYUzatrTb2mO2fpvwx2zpSroEtfbO",
+        .location = .root_sub,
+        .minimum_zig_version = "0.16.0",
+    } },
+    .dependency_edges = .{ .{ .name = "known_folders", .id = 1 }, null },
     .steps = .{ .{
         .id = .top_level,
         .owner = 0,
@@ -42,5 +22,5 @@
         .owner = 0,
         .name = "uninstall",
     } },
-    .zig_version = "0.15.1",
+    .zig_version = "0.16.0",
 }
