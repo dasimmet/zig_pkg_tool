@@ -426,7 +426,7 @@ pub fn process(opt: Options) !void {
         }
     }
     try archive.finishPedantically();
-    try compressor.writer.flush();
+    try compressor.finish();
     try output.interface.flush();
 }
 

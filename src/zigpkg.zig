@@ -350,8 +350,20 @@ pub fn cmd_create(opt: GlobalOptions, args: []const []const u8) !u8 {
     }
 
     const output = args[0];
-    const root = if (args.len > 1 and !std.mem.eql(u8, args[1], "--")) args[1] else ".";
-    const arg_sep: usize = if (args.len > 1 and std.mem.eql(u8, args[1], "--")) 2 else 1;
+    var root: []const u8 = ".";
+    var arg_sep: usize = 1;
+    if (args.len > 1) {
+        if (std.mem.eql(u8, args[1], "--")) {
+            arg_sep = 2;
+        } else {
+            root = args[1];
+            if (args.len > 2 and std.mem.eql(u8, args[2], "--")) {
+                arg_sep = 3;
+            } else {
+                arg_sep = 2;
+            }
+        }
+    }
 
     const zon_src = try runPrintConfiguration(opt, root, args[arg_sep..]);
     defer opt.init.gpa.free(zon_src);
